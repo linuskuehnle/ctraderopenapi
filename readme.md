@@ -26,7 +26,7 @@ The client intentionally keeps runtime behaviour explicit and minimal: it does n
 Use `go get` (module-aware):
 
 ```powershell
-go get github.com/linuskuehnle/ctrader@latest
+go get github.com/linuskuehnle/ctraderopenapi@latest
 ```
 
 Then import in your code:
