@@ -105,8 +105,6 @@ var isListenableEvent = map[ProtoOAPayloadType]bool{
 	PROTO_OA_MARGIN_CALL_TRIGGER_EVENT:        true,
 }
 
-type eventType int
-
 const (
 	// Subscribable events
 	EventType_Spots eventType = iota
@@ -125,4 +123,11 @@ const (
 	EventType_AccountDisconnect
 	EventType_MarginCallUpdate
 	EventType_MarginCallTrigger
+)
+
+const (
+	// API Client events
+	ClientEventType_ConnectionLossEvent clientEventType = iota
+	ClientEventType_ReconnectSuccessEvent
+	ClientEventType_ReconnectFailEvent
 )

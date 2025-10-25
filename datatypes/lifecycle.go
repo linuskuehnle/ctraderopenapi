@@ -19,7 +19,7 @@ import (
 	"sync"
 )
 
-type LifeCycleData interface {
+type LifecycleData interface {
 	Start() error
 	Stop() error
 	IsRunning() bool
@@ -32,7 +32,7 @@ type LifeCycleData interface {
 	GetOnMessageSendCh() (chan struct{}, error)
 }
 
-type lifeCycleData struct {
+type lifecycleData struct {
 	mu                sync.RWMutex
 	isRunning         bool
 	onMessageSendCh   chan struct{}
@@ -41,17 +41,20 @@ type lifeCycleData struct {
 	isClientConnected bool
 }
 
-func NewLifeCycleData() LifeCycleData {
-	return newLifeCycleData()
+func NewLifecycleData() LifecycleData {
+	return newLifecycleData()
 }
 
-func newLifeCycleData() *lifeCycleData {
-	return &lifeCycleData{
+func newLifecycleData() *lifecycleData {
+	d := &lifecycleData{
 		mu: sync.RWMutex{},
 	}
+
+	d.init()
+	return d
 }
 
-func (d *lifeCycleData) Start() error {
+func (d *lifecycleData) Start() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -61,14 +64,12 @@ func (d *lifeCycleData) Start() error {
 		}
 	}
 
-	d.init()
-
 	d.isRunning = true
 
 	return nil
 }
 
-func (d *lifeCycleData) Stop() error {
+func (d *lifecycleData) Stop() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -88,7 +89,7 @@ func (d *lifeCycleData) Stop() error {
 	return nil
 }
 
-func (d *lifeCycleData) IsRunning() bool {
+func (d *lifecycleData) IsRunning() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -96,20 +97,20 @@ func (d *lifeCycleData) IsRunning() bool {
 	return isRunning
 }
 
-func (d *lifeCycleData) init() {
+func (d *lifecycleData) init() {
 	d.onMessageSendCh = make(chan struct{}, 1)
 	d.ctx, d.cancelCtx = context.WithCancel(context.Background())
 	d.isClientConnected = false
 }
 
-func (d *lifeCycleData) clear() {
+func (d *lifecycleData) clear() {
 	d.onMessageSendCh = nil
 	d.ctx = nil
 	d.cancelCtx = nil
 	d.isClientConnected = false
 }
 
-func (d *lifeCycleData) checkLifeCycleRunning(callContext string) error {
+func (d *lifecycleData) checkLifeCycleRunning(callContext string) error {
 	if d.isRunning {
 		return nil
 	}
@@ -119,31 +120,27 @@ func (d *lifeCycleData) checkLifeCycleRunning(callContext string) error {
 	}
 }
 
-func (d *lifeCycleData) GetContext() (context.Context, error) {
+func (d *lifecycleData) GetContext() (context.Context, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	if err := d.checkLifeCycleRunning("error on GetContext"); err != nil {
-		return nil, err
-	}
+	// Allow getting context even if not running
 
 	ctx := d.ctx
 	return ctx, nil
 }
 
-func (d *lifeCycleData) CancelContext() error {
+func (d *lifecycleData) CancelContext() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if err := d.checkLifeCycleRunning("error on CancelContext"); err != nil {
-		return err
-	}
+	// Allow cancalling context even if not running
 
 	d.cancelCtx()
 	return nil
 }
 
-func (d *lifeCycleData) SetClientConnected(isConnected bool) error {
+func (d *lifecycleData) SetClientConnected(isConnected bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -155,7 +152,7 @@ func (d *lifeCycleData) SetClientConnected(isConnected bool) error {
 	return nil
 }
 
-func (d *lifeCycleData) IsClientConnected() bool {
+func (d *lifecycleData) IsClientConnected() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -167,14 +164,14 @@ func (d *lifeCycleData) IsClientConnected() bool {
 	return isConnected
 }
 
-func (d *lifeCycleData) SignalMessageSend() {
+func (d *lifecycleData) SignalMessageSend() {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	d.onMessageSendCh <- struct{}{}
 }
 
-func (d *lifeCycleData) GetOnMessageSendCh() (chan struct{}, error) {
+func (d *lifecycleData) GetOnMessageSendCh() (chan struct{}, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 

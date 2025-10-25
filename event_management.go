@@ -30,7 +30,7 @@ Pass through functions
 */
 /**/
 
-func (h *apiHandler) SubscribeEvent(eventData SubscribableEventData) error {
+func (h *apiClient) SubscribeEvent(eventData SubscribableEventData) error {
 	if eventData.SubcriptionData == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "SubscribeToEvent",
@@ -76,7 +76,7 @@ func (h *apiHandler) SubscribeEvent(eventData SubscribableEventData) error {
 			Req: &messages.ProtoOASubscribeLiveTrendbarReq{
 				CtidTraderAccountId: (*int64)(&subData.CtraderAccountId),
 				SymbolId:            &subData.SymbolId,
-				Period:              (*messages.ProtoOATrendbarPeriod)(&subData.Period),
+				Period:              (*ProtoOATrendbarPeriod)(&subData.Period),
 			},
 			ResType: PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES,
 			Res:     &messages.ProtoOASubscribeLiveTrendbarRes{},
@@ -109,7 +109,7 @@ func (h *apiHandler) SubscribeEvent(eventData SubscribableEventData) error {
 	return h.SendRequest(reqData)
 }
 
-func (h *apiHandler) UnsubscribeEvent(eventData SubscribableEventData) error {
+func (h *apiClient) UnsubscribeEvent(eventData SubscribableEventData) error {
 	if eventData.SubcriptionData == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "SubscribeToEvent",
@@ -155,7 +155,7 @@ func (h *apiHandler) UnsubscribeEvent(eventData SubscribableEventData) error {
 			Req: &messages.ProtoOAUnsubscribeLiveTrendbarReq{
 				CtidTraderAccountId: (*int64)(&subData.CtraderAccountId),
 				SymbolId:            &subData.SymbolId,
-				Period:              (*messages.ProtoOATrendbarPeriod)(&subData.Period),
+				Period:              (*ProtoOATrendbarPeriod)(&subData.Period),
 			},
 			ResType: PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES,
 			Res:     &messages.ProtoOAUnsubscribeLiveTrendbarRes{},
@@ -188,7 +188,7 @@ func (h *apiHandler) UnsubscribeEvent(eventData SubscribableEventData) error {
 	return h.SendRequest(reqData)
 }
 
-func (h *apiHandler) ListenToEvent(eventType eventType, onEventCh chan ListenableEvent, ctx context.Context) error {
+func (h *apiClient) ListenToEvent(eventType eventType, onEventCh chan ListenableEvent, ctx context.Context) error {
 	if onEventCh == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "ListenToEvent",
@@ -199,85 +199,85 @@ func (h *apiHandler) ListenToEvent(eventType eventType, onEventCh chan Listenabl
 		ctx = context.Background()
 	}
 
-	var eventId ProtoOAPayloadType
+	var eventId datatypes.EventId
 	var eventCallback func(event proto.Message)
 
 	switch eventType {
 	case EventType_Spots:
-		eventId = PROTO_OA_SPOT_EVENT
+		eventId = datatypes.EventId(PROTO_OA_SPOT_EVENT)
 
 		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*messages.ProtoOASpotEvent)
+			onEventCh <- event.(*ProtoOASpotEvent)
 		}
 	case EventType_DepthQuotes:
-		eventId = PROTO_OA_DEPTH_EVENT
+		eventId = datatypes.EventId(PROTO_OA_DEPTH_EVENT)
 
 		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*messages.ProtoOADepthEvent)
+			onEventCh <- event.(*ProtoOADepthEvent)
 		}
 
 	case EventType_TrailingSLChanged:
-		eventId = PROTO_OA_TRAILING_SL_CHANGED_EVENT
+		eventId = datatypes.EventId(PROTO_OA_TRAILING_SL_CHANGED_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOATrailingSLChangedEvent)
 		}
 	case EventType_SymbolChanged:
-		eventId = PROTO_OA_SYMBOL_CHANGED_EVENT
+		eventId = datatypes.EventId(PROTO_OA_SYMBOL_CHANGED_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOASymbolChangedEvent)
 		}
 	case EventType_TraderUpdated:
-		eventId = PROTO_OA_TRADER_UPDATE_EVENT
+		eventId = datatypes.EventId(PROTO_OA_TRADER_UPDATE_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOATraderUpdatedEvent)
 		}
 	case EventType_Execution:
-		eventId = PROTO_OA_EXECUTION_EVENT
+		eventId = datatypes.EventId(PROTO_OA_EXECUTION_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAExecutionEvent)
 		}
 	case EventType_OrderError:
-		eventId = PROTO_OA_ORDER_ERROR_EVENT
+		eventId = datatypes.EventId(PROTO_OA_ORDER_ERROR_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAOrderErrorEvent)
 		}
 	case EventType_MarginChanged:
-		eventId = PROTO_OA_MARGIN_CHANGED_EVENT
+		eventId = datatypes.EventId(PROTO_OA_MARGIN_CHANGED_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAMarginChangedEvent)
 		}
 	case EventType_AccountsTokenInvalidated:
-		eventId = PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT
+		eventId = datatypes.EventId(PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAAccountsTokenInvalidatedEvent)
 		}
 	case EventType_ClientDisconnect:
-		eventId = PROTO_OA_CLIENT_DISCONNECT_EVENT
+		eventId = datatypes.EventId(PROTO_OA_CLIENT_DISCONNECT_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAClientDisconnectEvent)
 		}
 	case EventType_AccountDisconnect:
-		eventId = PROTO_OA_ACCOUNT_DISCONNECT_EVENT
+		eventId = datatypes.EventId(PROTO_OA_ACCOUNT_DISCONNECT_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAAccountDisconnectEvent)
 		}
 	case EventType_MarginCallUpdate:
-		eventId = PROTO_OA_MARGIN_CALL_UPDATE_EVENT
+		eventId = datatypes.EventId(PROTO_OA_MARGIN_CALL_UPDATE_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAMarginCallUpdateEvent)
 		}
 	case EventType_MarginCallTrigger:
-		eventId = PROTO_OA_MARGIN_CALL_TRIGGER_EVENT
+		eventId = datatypes.EventId(PROTO_OA_MARGIN_CALL_TRIGGER_EVENT)
 
 		eventCallback = func(event proto.Message) {
 			onEventCh <- event.(*ProtoOAMarginCallTriggerEvent)
@@ -289,13 +289,42 @@ func (h *apiHandler) ListenToEvent(eventType eventType, onEventCh chan Listenabl
 		}
 	}
 
-	if err := h.eventHandler.AddEvent(eventId, eventCallback); err != nil {
+	if err := h.apiEventHandler.AddEvent(eventId, eventCallback); err != nil {
 		return err
 	}
 
 	removeCallback := func() error {
 		close(onEventCh)
-		return h.eventHandler.RemoveEvent(eventId)
+		return h.apiEventHandler.RemoveEvent(eventId)
+	}
+	go h.runListenerRemove(ctx, removeCallback)
+
+	return nil
+}
+
+func (h *apiClient) ListenToClientEvent(clientEventType clientEventType, onEventCh chan ListenableClientEvent, ctx context.Context) error {
+	if onEventCh == nil {
+		return &FunctionInvalidArgError{
+			FunctionName: "ListenToClientEvent",
+			Err:          errors.New("onEventCh mustn't be nil"),
+		}
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	eventId := datatypes.EventId(clientEventType)
+	eventCallback := func(event ListenableClientEvent) {
+		onEventCh <- event
+	}
+
+	if err := h.clientEventHandler.AddEvent(eventId, eventCallback); err != nil {
+		return err
+	}
+
+	removeCallback := func() error {
+		close(onEventCh)
+		return h.clientEventHandler.RemoveEvent(eventId)
 	}
 	go h.runListenerRemove(ctx, removeCallback)
 
@@ -308,16 +337,16 @@ Event specific listen functions
 /**/
 
 // runListenerRemove runs a goroutine that waits until either the listener context or the life cycle context is done
-func (h *apiHandler) runListenerRemove(listenerCtx context.Context, removeCallback func() error) {
-	lifeCycleCtx, _ := h.lifeCycleData.GetContext()
+func (h *apiClient) runListenerRemove(listenerCtx context.Context, removeCallback func() error) {
+	lifecycleCtx, _ := h.lifecycleData.GetContext()
 
 	// Wait until either the listener context or the life cycle context is done
-	// This ensures that if the api handler is disconnected and all events are removed
+	// This ensures that if the api client is disconnected and all events are removed
 	// that the listener goroutine also exits
 
 	select {
 	case <-listenerCtx.Done():
-	case <-lifeCycleCtx.Done():
+	case <-lifecycleCtx.Done():
 	}
 
 	// removeCallback does only contain RemoveEvent which in this context cannot return an error.
@@ -326,16 +355,16 @@ func (h *apiHandler) runListenerRemove(listenerCtx context.Context, removeCallba
 }
 
 // handleListenableEvent is called on an incoming event message that is listenable
-func (h *apiHandler) handleListenableEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
-	eventId := msgType
-	if !h.eventHandler.HasEvent(eventId) {
+func (h *apiClient) handleListenableEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
+	var eventId datatypes.EventId = datatypes.EventId(msgType)
+	if !h.apiEventHandler.HasEvent(eventId) {
 		// No listener for this event, ignore
 		return nil
 	}
 
 	payloadBytes := protoMsg.GetPayload()
 
-	var event datatypes.Event
+	var event proto.Message
 
 	switch msgType {
 	case PROTO_OA_SPOT_EVENT:
@@ -501,7 +530,7 @@ func (h *apiHandler) handleListenableEvent(msgType ProtoOAPayloadType, protoMsg 
 		}
 	}
 
-	return h.eventHandler.HandleEvent(eventId, event)
+	return h.apiEventHandler.HandleEvent(eventId, event)
 }
 
 // SpawnEventHandler starts a simple goroutine that reads `ListenableEvent`
@@ -542,6 +571,52 @@ func SpawnEventHandler[T ListenableEvent](ctx context.Context, onEventCh chan Li
 	go func(onEvent func(T)) {
 		for event := range onEventCh {
 			typedEvent, ok := CastToEventType[T](event)
+			if ok {
+				onEvent(typedEvent)
+			}
+		}
+	}(onEvent)
+	return nil
+}
+
+// SpawnClientEventHandler starts a simple goroutine that reads `ListenableClientEvent`
+// values from `onEventCh`, attempts to cast each value to the concrete
+// type `T` and invokes `onEvent` for matching values.
+//
+// This helper is useful when callers want a lightweight adapter: it
+// performs the type assertion and drops events that don't match `T`.
+//
+// Important notes:
+//   - `ctx` controls the lifetime of the handler. When `ctx` is canceled
+//     the goroutine exits. `onEventCh` must be closed by the sender to
+//     terminate the loop if `ctx` remains active.
+//   - `onEventCh` will be read-only for the goroutine; callers must not
+//     close it while other readers expect it to remain open.
+//   - The helper does not recover from panics in `onEvent`; if the typed
+//     handler may panic wrap it appropriately.
+func SpawnClientEventHandler[T ListenableClientEvent](ctx context.Context, onEventCh chan ListenableClientEvent, onEvent func(T)) error {
+	if ctx == nil {
+		return &FunctionInvalidArgError{
+			FunctionName: "SpawnClientEventHandler",
+			Err:          errors.New("ctx may not be nil"),
+		}
+	}
+	if onEventCh == nil {
+		return &FunctionInvalidArgError{
+			FunctionName: "SpawnClientEventHandler",
+			Err:          errors.New("onEventCh may not be nil"),
+		}
+	}
+	if onEvent == nil {
+		return &FunctionInvalidArgError{
+			FunctionName: "SpawnClientEventHandler",
+			Err:          errors.New("onEvent may not be nil"),
+		}
+	}
+
+	go func(onEvent func(T)) {
+		for event := range onEventCh {
+			typedEvent, ok := CastToClientEventType[T](event)
 			if ok {
 				onEvent(typedEvent)
 			}

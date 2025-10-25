@@ -23,7 +23,6 @@ type RequestQueue interface {
 	WithDataCallbackChan(chan struct{}) RequestQueue
 	Clear()
 	Enqueue(*RequestMetaData) error
-	EnqueueFront(*RequestMetaData) error
 	Dequeue() (*RequestMetaData, error)
 	RemoveFromQueue(RequestId) error
 }
@@ -78,23 +77,6 @@ func (q *requestQueue) Enqueue(r *RequestMetaData) error {
 	defer q.mu.Unlock()
 
 	if err := q.list.Append(r.Id); err != nil {
-		return err
-	}
-
-	q.reqMap[r.Id] = r
-
-	if q.list.Length() == 1 && q.onDataCh != nil {
-		q.onDataCh <- struct{}{}
-	}
-
-	return nil
-}
-
-func (q *requestQueue) EnqueueFront(r *RequestMetaData) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	if err := q.list.Prepend(r.Id); err != nil {
 		return err
 	}
 

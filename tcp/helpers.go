@@ -15,7 +15,11 @@
 package tcp
 
 import (
+	"errors"
+	"io"
 	"net"
+	"strings"
+	"syscall"
 )
 
 func splitAddress(address string) (string, string, error) {
@@ -49,4 +53,35 @@ func splitAddress(address string) (string, string, error) {
 	}
 
 	return host, port, nil
+}
+
+// isNetworkFatal determines whether an error means the connection is lost
+// and should trigger a reconnection attempt.
+func isNetworkFatal(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Graceful remote close or unexpected EOF
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	// Underlying connection reset, broken pipe, or other low-level errors
+	if errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		strings.Contains(err.Error(), "connection reset by peer") ||
+		strings.Contains(err.Error(), "broken pipe") {
+		return true
+	}
+
+	// Network errors may be temporary/retriable
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		// Consider temporary errors and timeouts as potentially recoverable
+		return !netErr.Timeout()
+	}
+
+	// Any unrecognized error is not considered network-fatal
+	return false
 }

@@ -1,180 +1,213 @@
 # ctrader — Go client for cTrader OpenAPI
 
-This repository contains a compact, idiomatic Go client for the cTrader OpenAPI. It focuses on providing a clear, testable API surface for sending requests and handling streaming events from the cTrader OpenAPI proxy.
+This repository provides a compact, idiomatic Go client for the cTrader
+OpenAPI proxy. It focuses on a small, testable public surface for:
 
-The client intentionally keeps runtime behaviour explicit and minimal: it does not try to hide or magically repair protocol errors. Instead it provides small, well-documented building blocks (an API handler, request/response mapping, and a concurrency-safe event dispatcher) that you can compose in production systems.
+- sending RPC-like requests (request/response mapped to protobuf messages),
+- subscribing to and listening for streaming server events (push-style),
+- a concurrency-safe event dispatcher and small adapters to wire typed
+	handlers without reflection.
 
-> Note: this README describes the features implemented in the codebase; behaviour such as network resilience, reconnect strategies or production hardening are provided as utilities in the code but are intentionally conservative so they remain easy to reason about and test.
+The library deliberately keeps runtime behaviour explicit and conservative
+— networking resilience and reconnect logic are provided but intentionally
+simple so they are easy to reason about and test.
+
+Contents
+- Quick highlights
+- Installation (Go modules)
+- Exported types & API summary
+- Examples (connect/request, subscribe + listen, client events)
+- Running tests
+- License
 
 ## Quick highlights
 
 - Typed, protobuf-backed request/response helpers (package `messages`).
-- Streaming event subscription and listening API: `SubscribeEvent`, `UnsubscribeEvent`, `ListenToEvent` on the `APIHandler` implementation.
-- Concurrency-safe event dispatch implemented by `datatypes.EventHandler` (uses protobuf messages as the event payload type).
-- Small adapters to let callers register typed handlers without reflection; these adapters perform a runtime type assertion and will panic if the handler type doesn't match the event type (caller responsibility).
-- Test helpers and small integration-like tests that read credentials from environment variables (see "Running tests").
-
-## Package layout (important files)
-
-- `api_handler.go` — main public API (`APIHandler`) and implementation (`apiHandler`). Connect/disconnect, SendRequest, ListenToEvent, SubscribeEvent, UnsubscribeEvent.
-- `messages/` — generated protobuf types and a small `event_assert.go` file that adds marker methods so only approved message types are usable as events.
-- `datatypes/` — small reusable data structures: `EventHandler`, `RequestQueue`, `RequestMapper`, a generic linked list, and typed errors used internally.
-- `tcp/` — low-level TCP/TLS client code driving the connection to the OpenAPI proxy.
+- Streaming event subscription and listening API: `SubscribeEvent`,
+	`UnsubscribeEvent`, `ListenToEvent` on the `APIClient` implementation.
+- Concurrency-safe event dispatch implemented by `datatypes.EventHandler`.
+- Small typed adapters (`SpawnEventHandler`, `SpawnClientEventHandler`) that
+	adapt generic channels to typed callbacks (they perform runtime type
+	assertions and will drop non-matching events).
 
 ## Installation
 
-Use `go get` (module-aware):
+This library uses Go modules. From your project directory you can add the
+dependency with:
 
 ```powershell
 go get github.com/linuskuehnle/ctraderopenapi@latest
 ```
 
-Then import in your code:
+Then import the package in your code:
 
 ```go
 import "github.com/linuskuehnle/ctraderopenapi"
 ```
 
-## Basic usage
-
-Below are minimal usage snippets that show the primary flows. See the tests in the repository for more realistic examples.
-
-Create the handler and connect:
-
-```go
-cred := ctraderopenapi.ApplicationCredentials{ClientId: "id", ClientSecret: "secret"}
-h, err := ctraderopenapi.NewApiHandler(cred, ctraderopenapi.Environment_Demo)
-if err != nil {
-    // ...
-}
-
-// Optionally adjust runtime configuration before connecting
-// cfg := ctraderopenapi.APIHandlerConfig{
-//     /* ... */
-// }
-// h = h.WithConfig(cfg)
-
-if err := h.Connect(); err != nil {
-    // ...
-}
-defer h.Disconnect()
-```
-
-Sending a request (RPC-style):
-
-```go
-req := messages.ProtoOAVersionReq{ /* fill fields if needed */ }
-var res messages.ProtoOAVersionRes
-reqData := ctraderopenapi.RequestData{
-    Ctx:     context.Background(),
-    ReqType: PROTO_OA_VERSION_REQ,
-    Req:     &req,
-    ResType: PROTO_OA_VERSION_RES,
-    Res:     &res,
-}
-if err := h.SendRequest(reqData); err != nil {
-    // ...
-}
-// use res
-```
-
-Listening to streaming events
-
-The API exposes two related concepts for events:
-
-- Subscribable events: events that require a server-side subscription (for example market spots or depth events). Use `SubscribeEvent`/`UnsubscribeEvent` to request or cancel server subscriptions.
-- Listenable events: events that are delivered by the server and can be listened to using `ListenToEvent`.
-
-`ListenToEvent` accepts a generic callback signature that receives a `ListenableEvent` (a small marker interface implemented by the generated protobuf pointer types). To make callers' life easier you can use the provided typed adapter so you pass a typed function like `func(*messages.ProtoOASpotEvent)` instead of writing the wrapper yourself.
-
-Example using the provided channel-based listener adapter:
-
-```go
-wg := sync.WaitGroup{}
-wg.Add(1)
-
-onSpot := func(e *messages.ProtoOASpotEvent) {
-    defer wg.Done()
-    // handle spot event
-}
-
-// Create a channel that will receive generic ListenableEvent values.
-onEventCh := make(chan datatypes.ListenableEvent)
-
-// Register the listener — ListenToEvent will close `onEventCh` when the
-// listener's context is canceled or when the handler disconnects.
-if err := h.ListenToEvent(EventType_Spots, onEventCh, ctx); err != nil {
-    // handle error
-}
-
-// SpawnEventHandler starts a small goroutine that converts generic events
-// received on `onEventCh` to the concrete typed event and calls `onSpot`.
-if err := SpawnEventHandler(ctx, onEventCh, onSpot); err != nil {
-    // handle error
-}
-
-// subscribe so the server will send immediate event messages
-sub := SubscribableEventData{
-    EventType: EventType_Spots,
-    SubcriptionData: &SubscriptionDataSpotEvent{
-        CtraderAccountId: CtraderAccountId(accountId),
-        SymbolIds:        []int64{symbolId},
-    },
-}
-if err := h.SubscribeEvent(sub); err != nil {
-    // ...
-}
-
-wg.Wait()
-
-// cleanup
-cancel()
-```
-
-Important notes about adapters and type-safety
-
-- The adapter uses a runtime type assertion (e.(T)). That means if you pass a typed handler for the wrong `eventType` the assertion will panic. The library intentionally avoids using reflection to keep the runtime surface small and explicit; callers are responsible for matching the handler type to the `eventType` they listen for.
-- The generated protobuf pointer types in `messages/` implement small marker methods (see `messages/event_assert.go`) so only intended message types satisfy the event interfaces. This prevents accidental registration of unrelated message types at compile-time for simple cases.
-
-Running the repository tests
-
-Some tests in this repo are integration-like and expect real credentials. The test helpers call `godotenv.Load()` which will load a `.env` file from the current working directory if present; alternatively you can set the required environment variables directly in your shell. The `.env` file is optional and not required for normal usage of the library — it is only convenient for running the package's internal tests locally.
-
-Create a `.env` file in the repository root (or set these variables in your shell) with the following keys if you want to run the tests that require a live account:
-
-- `_TEST_OPENAPI_CLIENT_ID` — application client id used by the tests
-- `_TEST_OPENAPI_CLIENT_SECRET` — application client secret used by the tests
-- `_TEST_OPENAPI_ACCOUNT_ID` — the numeric cTrader account id used for tests
-- `_TEST_OPENAPI_ACCOUNT_ACCESS_TOKEN` — a valid account access token
-- `_TEST_OPENAPI_ACCOUNT_ENVIRONMENT` — `DEMO` or `LIVE`
-
-Example on Windows PowerShell (alternative to a `.env` file):
+To install a binary (if provided by this repository) or to run tooling:
 
 ```powershell
-$env:_TEST_OPENAPI_ACCOUNT_ID = "123456"
-$env:_TEST_OPENAPI_ACCOUNT_ACCESS_TOKEN = "<token>"
-$env:_TEST_OPENAPI_ACCOUNT_ENVIRONMENT = "DEMO"
+go install github.com/linuskuehnle/ctraderopenapi@latest
+```
+
+## Exported types & API summary
+
+Key public types and functions (see `types.go` and `api_client.go` for
+full comments and examples):
+
+- `NewAPIClient(cred ApplicationCredentials, env Environment) (APIClient, error)`
+	— create a new client instance. Call `WithConfig` before `Connect` to
+	adjust runtime buffers/timeouts.
+
+- `APIClient` — main interface. Important methods:
+	- `Connect() error` / `Disconnect() error`
+	- `SendRequest(RequestData) error` — sends a protobuf-typed request and
+		unmarshals the response into the provided response object.
+	- `SubscribeEvent(SubscribableEventData)` / `UnsubscribeEvent(...)` —
+		subscribe/unsubscribe for server-side subscription-based events.
+	- `ListenToEvent(eventType, chan ListenableEvent, ctx)` — register a
+		long-running listener channel for push events.
+	- `ListenToClientEvent(clientEventType, chan ListenableClientEvent, ctx)`
+		— listen for client lifecycle events (connection loss, reconnect success
+		and reconnect fail).
+	- `MakeFatalErrChan() (chan error, error)` — create a channel to receive
+		unrecoverable/fatal errors. When a fatal error occurs the client will be
+		disconnected and the channel closed; create it again if you want to
+		observe subsequent fatal errors.
+
+- `ApplicationCredentials{ClientId, ClientSecret}` — credentials used by
+	the application to authenticate to the OpenAPI. Validate with
+	`CheckError()`.
+
+- `APIClientConfig` — runtime configuration (queue buffer sizes and the
+	request heap iteration timeout). Use `DefaultAPIClientConfig()` to obtain
+	sensible defaults and call `WithConfig` on the client before `Connect`.
+
+- Subscription helpers (used with `SubscribeEvent` / `UnsubscribeEvent`):
+	- `SubscribableEventData{EventType, SubcriptionData}`
+	- `SubscriptionDataSpotEvent{ CtraderAccountId, SymbolIds []int64 }`
+	- `SubscriptionDataLiveTrendbarEvent{ CtraderAccountId, SymbolId, Period }`
+	- `SubscriptionDataDepthQuoteEvent{ CtraderAccountId, SymbolIds }`
+
+- Event adapters & helpers:
+	- `ListenableEvent` and `ListenableClientEvent` are marker interfaces.
+	- `CastToEventType[T]` and `CastToClientEventType[T]` helpers to cast
+		generic events to typed values.
+	- `SpawnEventHandler` and `SpawnClientEventHandler` start small goroutines
+		that forward typed events to your handler.
+
+## Examples
+
+1) Basic connect and simple request
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/linuskuehnle/ctraderopenapi"
+)
+
+func main() {
+	cred := ctraderopenapi.ApplicationCredentials{ClientId: "id", ClientSecret: "secret"}
+	client, err := ctraderopenapi.NewAPIClient(cred, ctraderopenapi.Environment_Demo)
+	if err != nil {
+		panic(err)
+	}
+
+	client = client.WithConfig(ctraderopenapi.DefaultAPIClientConfig())
+	if err := client.Connect(); err != nil {
+		panic(err)
+	}
+	defer client.Disconnect()
+
+	req := ctraderopenapi.ProtoOAVersionReq{}
+	var res ctraderopenapi.ProtoOAVersionRes
+	reqData := ctraderopenapi.RequestData{
+		Ctx:     context.Background(),
+		ReqType: ctraderopenapi.PROTO_OA_VERSION_REQ,
+		Req:     &req,
+		ResType: ctraderopenapi.PROTO_OA_VERSION_RES,
+		Res:     &res,
+	}
+	if err := client.SendRequest(reqData); err != nil {
+		fmt.Println("request failed:", err)
+		return
+	}
+	fmt.Println("version response:", res)
+}
+```
+
+2) Subscribe to spot events and handle them with the typed adapter
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+
+onEventCh := make(chan ctraderopenapi.ListenableEvent)
+if err := client.ListenToEvent(ctraderopenapi.EventType_Spots, onEventCh, ctx); err != nil {
+	panic(err)
+}
+
+_ = ctraderopenapi.SpawnEventHandler(ctx, onEventCh, func(e *ctraderopenapi.ProtoOASpotEvent) {
+	fmt.Println("spot event:", e)
+})
+
+sub := ctraderopenapi.SubscribableEventData{
+	EventType: ctraderopenapi.EventType_Spots,
+	SubcriptionData: &ctraderopenapi.SubscriptionDataSpotEvent{
+		CtraderAccountId: ctraderopenapi.CtraderAccountId(123456),
+		SymbolIds:        []int64{1, 2, 3},
+	},
+}
+if err := client.SubscribeEvent(sub); err != nil {
+	panic(err)
+}
+```
+
+3) Listen for client lifecycle events and fatal errors
+
+```go
+fatalCh, err := client.MakeFatalErrChan()
+if err != nil {
+	panic(err)
+}
+go func() {
+	for err := range fatalCh {
+		fmt.Println("fatal error:", err)
+	}
+}()
+
+clientCh := make(chan ctraderopenapi.ListenableClientEvent)
+if err := client.ListenToClientEvent(ctraderopenapi.ClientEventType_ReconnectSuccessEvent, clientCh, context.Background()); err != nil {
+	panic(err)
+}
+ctraderopenapi.SpawnClientEventHandler(context.Background(), clientCh, func(e *ctraderopenapi.ReconnectSuccessEvent) {
+	fmt.Println("reconnected")
+})
+```
+
+## Running tests
+
+Some tests exercise live interactions and expect credentials via environment
+variables or a `.env` file (see `stubs_test.go`). To run unit/integration
+tests locally:
+
+```powershell
 go test ./...
 ```
 
-Notes and caveats
+To run a focused test and vet the code:
 
-- The library uses generated protobuf types; do not edit the generated `.pb.go` files by hand.
-- Error types returned from server responses are modelled and wrapped into client errors (see `errors.go`). If you see garbled error text it usually means the library attempted to print raw payload bytes instead of unmarshalling them into the expected protobuf error message — this repository already contains code paths that unmarshal server error payloads into `messages.ProtoErrorRes`.
-- The project includes small helpers to adapt typed listeners to the generic listener signature — there are two equivalently functioning adapters in the codebase; consider unifying their names if you prefer a single canonical API.
-
-Contributing
-
-Contributions are welcome. Good first issues include:
-
-- Add an `examples/` directory with a minimal bot that authenticates and subscribes to spots.
-- Add unit tests that mock `tcp` and exercise the request mapper and event handler without network access.
-- Consolidate adapter helper names and improve the documentation examples.
+```powershell
+go vet ./...
+go test ./... -run TestClientConnectDisconnect
+```
 
 ## License
 
-This project is licensed under the Apache License 2.0 — see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the Apache License 2.0 — see the
+[LICENSE](./LICENSE) file for details.
 
----
-
-If you'd like, I can also add a small `examples/` directory and a focused unit test that demonstrates `ListenToEvent` + `SubscribeEvent` without needing a networked cTrader account — say the word and I'll scaffold it.

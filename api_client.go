@@ -28,52 +28,50 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// APIHandler is the main entry point for interacting with the cTrader
+// APIClient is the main entry point for interacting with the cTrader
 // OpenAPI. It exposes methods to connect/disconnect, send RPC-like
 // requests, and subscribe to or listen for server-side events.
 //
 // Concurrency / lifecycle notes:
 //   - Implementations are safe for concurrent use by multiple goroutines.
-//   - The handler maintains an internal lifecycle (started via Connect,
+//   - The client maintains an internal lifecycle (started via Connect,
 //     stopped via Disconnect). Certain operations assume a running
 //     lifecycle (for example, sending requests or listening to events).
 //
 // Error handling:
 //   - Fatal server-side or protocol errors are delivered via the channel
 //     returned by MakeFatalErrChan(); when such an error is emitted the
-//     handler will be disconnected and cleaned up. the channel stays open
+//     client will be disconnected and cleaned up. the channel stays open
 //     until a fatal error occurs no matter connect/disconnect state.
 //
 // Usage summary:
-//   - Create the handler with NewApiHandler, call Connect, then use
+//   - Create the client with NewApiClient, call Connect, then use
 //     SendRequest, SubscribeEvent/UnsubscribeEvent, or ListenToEvent as
 //     required. Call Disconnect when finished.
-type APIHandler interface {
+type APIClient interface {
 	/*
 		Build functions
 	*/
 	/**/
 
-	// MakeFatalErrChan creates a channel that will receive fatal errors from the handler.
-	// Errors that are sent to this channel cannot be recovered from, and the handler will be
+	// MakeFatalErrChan creates a channel that will receive fatal errors from the client.
+	// Errors that are sent to this channel cannot be recovered from, and the client will be
 	// in a disconnected and memory-cleaned state after a fatal error is sent.
 	// MakeFatalErrChan must be called again once a fatal error has occured.
 	MakeFatalErrChan() (chan error, error)
 
-	// WithConfig updates the handler configuration. It must be called while
-	// the handler is not connected (before `Connect`) and returns the same
-	// handler to allow fluent construction.
-	WithConfig(APIHandlerConfig) APIHandler
+	// WithConfig updates the client configuration. It must be called while
+	// the client is not connected (before `Connect`) and returns the same
+	// client to allow fluent construction.
+	WithConfig(APIClientConfig) APIClient
 
-	// IsConnected returns true if the handler is currently connected to the server.
+	// IsConnected returns true if the client is currently connected to the server.
 	IsConnected() bool
 	// Connect connects to the cTrader OpenAPI server, authenticates the application and starts the keepalive routine.
 	Connect() error
 	// Disconnect logs the user out, stops the keepalive routine and closes the connection. It does not perform
-	// memory cleanup or deallocation, the caller is responsible for disposing of the entire handler.
+	// memory cleanup or deallocation, the caller is responsible for disposing of the entire client.
 	Disconnect() error
-	// Reconnect performs a memory and connection cleanup followed by a connect. It can be used to recover from non-fatal connection issues.
-	Reconnect() error
 	// SendRequest sends a request to the server and waits for the response.
 	// The response is written to the Res field of the provided RequestData struct.
 	SendRequest(RequestData) error
@@ -86,7 +84,7 @@ type APIHandler interface {
 	// The call will send the corresponding subscribe request to the
 	// server and return any transport or validation error. When the
 	// server starts sending matching events, they will be dispatched to
-	// the library's internal event handlers and any registered
+	// the library's internal event clients and any registered
 	// callbacks.
 	SubscribeEvent(eventData SubscribableEventData) error
 
@@ -98,17 +96,17 @@ type APIHandler interface {
 	UnsubscribeEvent(eventData SubscribableEventData) error
 
 	// ListenToEvent registers a long-running listener for listenable
-	// events (server-initiated push events). `eventType` selects which
-	// event to listen for. `onEvent` is called for each delivered
-	// event; it receives a `ListenableEvent` (concrete types live in
-	// the `messages` package). `ctx` controls the lifetime of the
-	// listener: when `ctx` is canceled the listener is removed. If
-	// `ctx` is nil, a background context is used.
+	// events (server-initiated push events).
+	// `eventType` selects which event to listen for.
+	// `onEventCh` receives a `ListenableEvent` (concrete types live in
+	// the `messages` package).
+	// `ctx` controls the lifetime of the listener: when `ctx` is canceled the
+	// listener is removed. If `ctx` is nil, a background context is used.
 	//
 	// onEventCh behavior:
 	//  - The provided channel is used by the library to deliver events of the
 	//    requested `eventType`. The library will close the channel when the
-	//    listener's context (`ctx`) is canceled or when the handler is
+	//    listener's context (`ctx`) is canceled or when the client is
 	//    disconnected. Callers should treat channel close as end-of-stream and
 	//    not attempt to write to the channel.
 	//
@@ -116,25 +114,25 @@ type APIHandler interface {
 	// or the `SpawnEventHandler` helper to adapt typed functions.
 	//
 	// Mapping of `eventType` → concrete callback argument type:
-	//  - EventType_Spots                  -> ProtoOASpotEvent
-	//  - EventType_DepthQuotes            -> ProtoOADepthEvent
-	//  - EventType_TrailingSLChanged     -> ProtoOATrailingSLChangedEvent
-	//  - EventType_SymbolChanged         -> ProtoOASymbolChangedEvent
-	//  - EventType_TraderUpdated         -> ProtoOATraderUpdatedEvent
-	//  - EventType_Execution             -> ProtoOAExecutionEvent
-	//  - EventType_OrderError            -> ProtoOAOrderErrorEvent
-	//  - EventType_MarginChanged         -> ProtoOAMarginChangedEvent
+	//  - EventType_Spots                     -> ProtoOASpotEvent
+	//  - EventType_DepthQuotes               -> ProtoOADepthEvent
+	//  - EventType_TrailingSLChanged        -> ProtoOATrailingSLChangedEvent
+	//  - EventType_SymbolChanged            -> ProtoOASymbolChangedEvent
+	//  - EventType_TraderUpdated            -> ProtoOATraderUpdatedEvent
+	//  - EventType_Execution                -> ProtoOAExecutionEvent
+	//  - EventType_OrderError               -> ProtoOAOrderErrorEvent
+	//  - EventType_MarginChanged            -> ProtoOAMarginChangedEvent
 	//  - EventType_AccountsTokenInvalidated -> ProtoOAAccountsTokenInvalidatedEvent
-	//  - EventType_ClientDisconnect      -> ProtoOAClientDisconnectEvent
-	//  - EventType_AccountDisconnect     -> ProtoOAAccountDisconnectEvent
-	//  - EventType_MarginCallUpdate      -> ProtoOAMarginCallUpdateEvent
-	//  - EventType_MarginCallTrigger     -> ProtoOAMarginCallTriggerEvent
+	//  - EventType_ClientDisconnect         -> ProtoOAClientDisconnectEvent
+	//  - EventType_AccountDisconnect        -> ProtoOAAccountDisconnectEvent
+	//  - EventType_MarginCallUpdate         -> ProtoOAMarginCallUpdateEvent
+	//  - EventType_MarginCallTrigger        -> ProtoOAMarginCallTriggerEvent
 	//
 	// To register a typed callback without writing a manual wrapper, use
 	// `SpawnEventHandler` which starts a small goroutine that adapts the
-	// generic `ListenableEvent` channel to a typed handler. Example:
+	// generic `ListenableEvent` channel to a typed client. Example:
 	//
-	//   onSpot := func(e *messages.ProtoOASpotEvent) { fmt.Println(e) }
+	//   onSpot := func(e *ProtoOASpotEvent) { fmt.Println(e) }
 	//   onEventCh := make(chan ListenableEvent)
 	//   if err := h.ListenToEvent(EventType_Spots, onEventCh, ctx); err != nil { /* ... */ }
 	//   if err := SpawnEventHandler(ctx, onEventCh, onSpot); err != nil { /* ... */ }
@@ -143,17 +141,56 @@ type APIHandler interface {
 	// the handler's type does not match the actual delivered event. This is a
 	// caller error.
 	ListenToEvent(eventType eventType, onEventCh chan ListenableEvent, ctx context.Context) error
+
+	// ListenToClientEvent registers a long-running listener for listenable
+	// api client events (connection loss / reconnect success / reconnect fail).
+	// `eventType` selects which event to listen for.
+	// `onEventCh` receives a `ListenToClientEvent` (concrete types live in the
+	// `messages` package).
+	// `ctx` controls the lifetime of the listener: when `ctx` is canceled the
+	// listener is removed. If `ctx` is nil, a background context is used.
+	//
+	// onEventCh behavior:
+	//  - The provided channel is used by the library to deliver events of the
+	//    requested `eventType`. The library will close the channel when the
+	//    listener's context (`ctx`) is canceled or when the client is
+	//    disconnected. Callers should treat channel close as end-of-stream and
+	//    not attempt to write to the channel.
+	//
+	// Note: callbacks that need typed event values can use `CastToClientEventType`
+	// or the `SpawnClientEventHandler` helper to adapt typed functions.
+	//
+	// Mapping of `clientEventType` → concrete callback argument type:
+	//  - ClientEventType_ConnectionLossEvent   -> ConnectionLossEvent
+	//  - ClientEventType_ReconnectSuccessEvent -> ReconnectSuccessEvent
+	//  - ClientEventType_ReconnectFailEvent    -> ReconnectFailEvent
+	//
+	// To register a typed callback without writing a manual wrapper, use
+	// `SpawnClientEventHandler` which starts a small goroutine that adapts the
+	// generic `ListenToClientEvent` channel to a typed client. Example:
+	//
+	//   onConnLoss := func(e *ConnectionLossEvent) { fmt.Println(e) }
+	//   onEventCh := make(chan ListenableClientEvent)
+	//   if err := h.ListenToClientEvent(ClientEventType_ConnectionLossEvent, onEventCh, ctx); err != nil { /* ... */ }
+	//   if err := SpawnClientEventHandler(ctx, onEventCh, onConnLoss); err != nil { /* ... */ }
+	//
+	// Note: the adapter performs a runtime type assertion and will panic if
+	// the handler's type does not match the actual delivered event. This is a
+	// caller error.
+	ListenToClientEvent(clientEventType clientEventType, onEventCh chan ListenableClientEvent, ctx context.Context) error
 }
 
-type apiHandler struct {
+type apiClient struct {
 	mu  sync.RWMutex
-	cfg *APIHandlerConfig
+	cfg *APIClientConfig
 
 	requestQueue  datatypes.RequestQueue
 	requestHeap   datatypes.RequestHeap
-	eventHandler  datatypes.EventHandler
-	lifeCycleData datatypes.LifeCycleData
+	lifecycleData datatypes.LifecycleData
 	tcpClient     tcp.TCPClient
+
+	apiEventHandler    datatypes.EventHandler[proto.Message]
+	clientEventHandler datatypes.EventHandler[ListenableClientEvent]
 
 	cred ApplicationCredentials
 
@@ -163,12 +200,12 @@ type apiHandler struct {
 	fatalErrCh chan error
 }
 
-// NewApiHandler creates a new API handler interface instance. The returned handler is not connected automatically.
-func NewApiHandler(cred ApplicationCredentials, env Environment) (APIHandler, error) {
-	return newApiHandler(cred, env)
+// NewAPIClient creates a new API client interface instance. The returned client is not connected automatically.
+func NewAPIClient(cred ApplicationCredentials, env Environment) (APIClient, error) {
+	return newApiClient(cred, env)
 }
 
-func newApiHandler(cred ApplicationCredentials, env Environment) (*apiHandler, error) {
+func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, error) {
 	if err := cred.CheckError(); err != nil {
 		return nil, err
 	}
@@ -178,30 +215,38 @@ func newApiHandler(cred ApplicationCredentials, env Environment) (*apiHandler, e
 		return nil, err
 	}
 
-	h := apiHandler{
+	h := apiClient{
 		mu: sync.RWMutex{},
 
-		requestQueue: datatypes.NewRequestQueue(),
-		requestHeap:  datatypes.NewRequestHeap(),
-		eventHandler: datatypes.NewEventHandler().
+		requestQueue:  datatypes.NewRequestQueue(),
+		requestHeap:   datatypes.NewRequestHeap(),
+		lifecycleData: datatypes.NewLifecycleData(),
+
+		apiEventHandler: datatypes.NewEventHandler[proto.Message]().
 			WithIgnoreIdsNotIncluded(),
-		lifeCycleData: datatypes.NewLifeCycleData(),
-		tcpClient: tcp.NewTCPClient(string(env.GetAddress())).
-			WithTLS(tlsConfig),
+		clientEventHandler: datatypes.NewEventHandler[ListenableClientEvent]().
+			WithIgnoreIdsNotIncluded(),
 
 		cred: cred,
 	}
 
-	h.WithConfig(DefaultAPIHandlerConfig())
+	h.tcpClient = tcp.NewTCPClient(string(env.GetAddress())).
+		WithTLS(tlsConfig).
+		WithTimeout(time.Millisecond*100).
+		WithReconnectDelay(time.Millisecond*500).
+		WithInfiniteReconnectAttempts().
+		WithReconnectHooks(h.connectionLossCallback, h.reconnectSuccessCallback, h.reconnectFailCallback)
+
+	h.WithConfig(DefaultAPIClientConfig())
 
 	return &h, nil
 }
 
-func (h *apiHandler) MakeFatalErrChan() (chan error, error) {
+func (h *apiClient) MakeFatalErrChan() (chan error, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.lifeCycleData.IsClientConnected() {
+	if h.lifecycleData.IsClientConnected() {
 		return nil, &LifeCycleAlreadyRunningError{
 			CallContext: "error creating fatal error channel",
 		}
@@ -211,11 +256,11 @@ func (h *apiHandler) MakeFatalErrChan() (chan error, error) {
 	return h.fatalErrCh, nil
 }
 
-func (h *apiHandler) WithConfig(config APIHandlerConfig) APIHandler {
+func (h *apiClient) WithConfig(config APIClientConfig) APIClient {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.lifeCycleData.IsClientConnected() {
+	if h.lifecycleData.IsClientConnected() {
 		return h
 	}
 
@@ -224,7 +269,7 @@ func (h *apiHandler) WithConfig(config APIHandlerConfig) APIHandler {
 	return h
 }
 
-func (h *apiHandler) onQueueData() {
+func (h *apiClient) onQueueData() {
 	reqMetaData, _ := h.requestQueue.Dequeue()
 	// Don't check the error of Dequeue since by the time this
 	// callback goroutine is called, all previously enqueued requests might
@@ -251,7 +296,8 @@ func (h *apiHandler) onQueueData() {
 
 	if err := h.handleSendPayload(reqMetaData); err != nil {
 		// Check if the queue data callback has been called when the tcp client connection has just been closed
-		if _, ok := err.(*NoConnectionError); !ok {
+		var noConnErr *NoConnectionError
+		if !errors.As(err, &noConnErr) {
 			if reqErrCh != nil {
 				reqErrCh <- err
 
@@ -265,8 +311,8 @@ func (h *apiHandler) onQueueData() {
 	}
 }
 
-func (h *apiHandler) onTCPMessage(msgBytes []byte) {
-	if h.lifeCycleData.IsClientConnected() {
+func (h *apiClient) onTCPMessage(msgBytes []byte) {
+	if h.lifecycleData.IsClientConnected() {
 		// Only lock if life cycle is running already, on Connect the mutex is already locked
 		h.mu.RLock()
 		defer h.mu.RUnlock()
@@ -326,7 +372,8 @@ func (h *apiHandler) onTCPMessage(msgBytes []byte) {
 		// Remove the request meta data from the request heap
 		reqMetaData, err := h.requestHeap.RemoveNode(reqId)
 		if err != nil {
-			if _, ok := err.(*RequestHeapNodeNotIncludedError); ok {
+			var reqHeapErr *RequestHeapNodeNotIncludedError
+			if errors.As(err, &reqHeapErr) {
 				return
 			}
 			h.fatalErrCh <- err
@@ -343,16 +390,11 @@ func (h *apiHandler) onTCPMessage(msgBytes []byte) {
 	}
 }
 
-func (h *apiHandler) onFatalError(err error) {
-	if h.lifeCycleData.IsClientConnected() {
+func (h *apiClient) onFatalError(err error) {
+	if h.lifecycleData.IsClientConnected() {
 		// Only lock if life cycle is running already, on Connect the mutex is already locked
 		h.mu.Lock()
 		defer h.mu.Unlock()
-	}
-
-	if !h.tcpClient.HasConn() {
-		// Caught concurrent function call with another fatal error that cannot be processed
-		return
 	}
 
 	h.disconnect()
@@ -366,7 +408,29 @@ func (h *apiHandler) onFatalError(err error) {
 	h.fatalErrCh = nil
 }
 
-func (h *apiHandler) IsConnected() bool {
+func (h *apiClient) connectionLossCallback() {
+	event := &ConnectionLossEvent{}
+	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ConnectionLossEvent), event)
+}
+
+func (h *apiClient) reconnectSuccessCallback() {
+	if err := h.authenticateApp(); err != nil {
+		h.fatalErrCh <- err
+		return
+	}
+
+	event := &ReconnectSuccessEvent{}
+	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectSuccessEvent), event)
+}
+
+func (h *apiClient) reconnectFailCallback(err error) {
+	event := &ReconnectFailEvent{
+		Err: err,
+	}
+	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectFailEvent), event)
+}
+
+func (h *apiClient) IsConnected() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -374,47 +438,34 @@ func (h *apiHandler) IsConnected() bool {
 	return isConn
 }
 
-func (h *apiHandler) isConnected() bool {
+func (h *apiClient) isConnected() bool {
 	return h.tcpClient.HasConn()
 }
 
-func (h *apiHandler) Connect() error {
+func (h *apiClient) Connect() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	return h.connect()
 }
 
-func (h *apiHandler) Disconnect() error {
+func (h *apiClient) Disconnect() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	return h.disconnect()
 }
 
-func (h *apiHandler) Reconnect() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if err := h.disconnect(); err != nil {
-		if _, ok := err.(*tcp.CloseConnectionError); !ok {
-			return err
-		} // else: ignore close connection on already closed connection error on reconnect
-	}
-
-	return h.connect()
-}
-
-func (h *apiHandler) SendRequest(reqData RequestData) error {
+func (h *apiClient) SendRequest(reqData RequestData) error {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	return h.sendRequest(reqData)
 }
 
-func (h *apiHandler) sendRequest(reqData RequestData) error {
+func (h *apiClient) sendRequest(reqData RequestData) error {
 	if !h.isConnected() {
-		return &ApiHandlerNotConnectedError{
+		return &APIClientNotConnectedError{
 			CallContext: "SendRequest",
 		}
 	}
@@ -479,7 +530,7 @@ func (h *apiHandler) sendRequest(reqData RequestData) error {
 	return nil
 }
 
-func (h *apiHandler) connect() error {
+func (h *apiClient) connect() error {
 	// Config specific setup
 	h.queueDataCh = make(chan struct{}, h.cfg.QueueBufferSize)
 	h.tcpMessageCh = make(chan []byte, h.cfg.TCPMessageBufferSize)
@@ -488,15 +539,15 @@ func (h *apiHandler) connect() error {
 	h.requestQueue.WithDataCallbackChan(h.queueDataCh)
 	h.tcpClient.WithMessageCallbackChan(h.tcpMessageCh, h.onFatalError)
 
-	if err := h.lifeCycleData.Start(); err != nil {
+	if err := h.lifecycleData.Start(); err != nil {
 		return err
 	}
 
-	ctx, err := h.lifeCycleData.GetContext()
+	ctx, err := h.lifecycleData.GetContext()
 	if err != nil {
 		return err
 	}
-	onMessageSend, err := h.lifeCycleData.GetOnMessageSendCh()
+	onMessageSend, err := h.lifecycleData.GetOnMessageSendCh()
 	if err != nil {
 		return err
 	}
@@ -526,16 +577,16 @@ func (h *apiHandler) connect() error {
 		return err
 	}
 
-	h.lifeCycleData.SetClientConnected(true)
+	h.lifecycleData.SetClientConnected(true)
 
 	return nil
 }
 
-func (h *apiHandler) disconnect() error {
+func (h *apiClient) disconnect() error {
 	h.requestQueue.Clear()
-	h.eventHandler.Clear()
+	h.apiEventHandler.Clear()
 
-	h.lifeCycleData.Stop()
+	h.lifecycleData.Stop()
 
 	h.requestHeap.Stop()
 
@@ -546,7 +597,7 @@ func (h *apiHandler) disconnect() error {
 	return nil
 }
 
-func (h *apiHandler) authenticateApp() error {
+func (h *apiClient) authenticateApp() error {
 	reqData := RequestData{
 		Ctx:     context.Background(),
 		ReqType: PROTO_OA_APPLICATION_AUTH_REQ,
@@ -561,7 +612,7 @@ func (h *apiHandler) authenticateApp() error {
 	return h.sendRequest(reqData)
 }
 
-func (h *apiHandler) emitHeartbeat() error {
+func (h *apiClient) emitHeartbeat() error {
 	errCh := make(chan error)
 
 	reqData := RequestData{
@@ -575,7 +626,7 @@ func (h *apiHandler) emitHeartbeat() error {
 		return err
 	}
 
-	if err := h.enqueueRequestFront(metaData); err != nil {
+	if err := h.enqueueRequest(metaData); err != nil {
 		return err
 	}
 
@@ -585,7 +636,7 @@ func (h *apiHandler) emitHeartbeat() error {
 	return nil
 }
 
-func (h *apiHandler) handleEnqueue(calleeRef string, reqMetaData *datatypes.RequestMetaData) error {
+func (h *apiClient) handleEnqueue(calleeRef string, reqMetaData *datatypes.RequestMetaData) error {
 	if !h.tcpClient.HasConn() {
 		return &EnqueueOnClosedConnError{}
 	}
@@ -600,7 +651,7 @@ func (h *apiHandler) handleEnqueue(calleeRef string, reqMetaData *datatypes.Requ
 	return nil
 }
 
-func (h *apiHandler) enqueueRequest(reqMetaData *datatypes.RequestMetaData) error {
+func (h *apiClient) enqueueRequest(reqMetaData *datatypes.RequestMetaData) error {
 	if err := h.handleEnqueue("enqueueRequest", reqMetaData); err != nil {
 		return err
 	}
@@ -608,15 +659,7 @@ func (h *apiHandler) enqueueRequest(reqMetaData *datatypes.RequestMetaData) erro
 	return h.requestQueue.Enqueue(reqMetaData)
 }
 
-func (h *apiHandler) enqueueRequestFront(reqMetaData *datatypes.RequestMetaData) error {
-	if err := h.handleEnqueue("enqueueRequestFront", reqMetaData); err != nil {
-		return err
-	}
-
-	return h.requestQueue.EnqueueFront(reqMetaData)
-}
-
-func (h *apiHandler) handleSendPayload(reqMetaData *datatypes.RequestMetaData) error {
+func (h *apiClient) handleSendPayload(reqMetaData *datatypes.RequestMetaData) error {
 	// Before sending the request first check if the request context has already expired
 	if err := reqMetaData.Ctx.Err(); err != nil {
 		return &RequestContextExpiredError{
@@ -627,7 +670,7 @@ func (h *apiHandler) handleSendPayload(reqMetaData *datatypes.RequestMetaData) e
 	return h.sendPayload(reqMetaData.Id, reqMetaData.Req, reqMetaData.ReqType)
 }
 
-func (h *apiHandler) sendPayload(reqId datatypes.RequestId, msg proto.Message, payloadType ProtoOAPayloadType) error {
+func (h *apiClient) sendPayload(reqId datatypes.RequestId, msg proto.Message, payloadType ProtoOAPayloadType) error {
 	msgBytes, err := proto.Marshal(msg)
 	if err != nil {
 		return &ProtoMarshalError{
@@ -652,12 +695,12 @@ func (h *apiHandler) sendPayload(reqId datatypes.RequestId, msg proto.Message, p
 	}
 
 	// Signal the keepalive that a message is being sent
-	h.lifeCycleData.SignalMessageSend()
+	h.lifecycleData.SignalMessageSend()
 
 	return h.tcpClient.Send(reqBytes)
 }
 
-func (h *apiHandler) runHeartbeat(ctx context.Context, onMessageSend chan struct{}) {
+func (h *apiClient) runHeartbeat(ctx context.Context, onMessageSend chan struct{}) {
 	timer := time.NewTimer(time.Second * Heartbeat_Timeout_Seconds)
 	defer timer.Stop()
 
@@ -686,10 +729,10 @@ func (h *apiHandler) runHeartbeat(ctx context.Context, onMessageSend chan struct
 	}
 }
 
-func (h *apiHandler) runQueueDataHandler(lifeCycleCtx context.Context, queueDataCh <-chan struct{}) {
+func (h *apiClient) runQueueDataHandler(lifecycleCtx context.Context, queueDataCh <-chan struct{}) {
 	for {
 		select {
-		case <-lifeCycleCtx.Done():
+		case <-lifecycleCtx.Done():
 			return
 		case _, ok := <-queueDataCh:
 			if !ok {
@@ -700,10 +743,10 @@ func (h *apiHandler) runQueueDataHandler(lifeCycleCtx context.Context, queueData
 	}
 }
 
-func (h *apiHandler) runTCPMessageHandler(lifeCycleCtx context.Context, tcpMessageCh <-chan []byte) {
+func (h *apiClient) runTCPMessageHandler(lifecycleCtx context.Context, tcpMessageCh <-chan []byte) {
 	for {
 		select {
-		case <-lifeCycleCtx.Done():
+		case <-lifecycleCtx.Done():
 			return
 		case msg, ok := <-tcpMessageCh:
 			if !ok {
@@ -714,10 +757,10 @@ func (h *apiHandler) runTCPMessageHandler(lifeCycleCtx context.Context, tcpMessa
 	}
 }
 
-func (h *apiHandler) runFatalErrorHandler(lifeCycleCtx context.Context, fatalErrCh <-chan error) {
+func (h *apiClient) runFatalErrorHandler(lifecycleCtx context.Context, fatalErrCh <-chan error) {
 	for {
 		select {
-		case <-lifeCycleCtx.Done():
+		case <-lifecycleCtx.Done():
 			return
 		case err, ok := <-fatalErrCh:
 			if !ok {

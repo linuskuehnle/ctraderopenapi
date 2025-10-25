@@ -26,7 +26,7 @@ func TestSubscribeUnsubscribeEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiHandler(env)
+	h, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestListenEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiHandler(env)
+	h, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestListenEventWithSpawnEventHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiHandler(env)
+	h, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestLiveTrendbarEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiHandler(env)
+	h, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,6 +287,55 @@ func TestLiveTrendbarEvent(t *testing.T) {
 	}
 
 	if err := h.Disconnect(); err != nil {
+		t.Fatalf("error disconnecting: %v", err)
+	}
+}
+
+// Test client events
+func TestClientEvents(t *testing.T) {
+	h, err := createApiClient(Environment_Demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	connLossCh := make(chan ListenableClientEvent)
+	if err := h.ListenToClientEvent(ClientEventType_ConnectionLossEvent, connLossCh, nil); err != nil {
+		t.Fatalf("error registering connection loss event listener: %v", err)
+	}
+	reconnectSuccessCh := make(chan ListenableClientEvent)
+	if err := h.ListenToClientEvent(ClientEventType_ReconnectSuccessEvent, reconnectSuccessCh, nil); err != nil {
+		t.Fatalf("error registering connection loss event listener: %v", err)
+	}
+
+	if err = h.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+
+	h.tcpClient.JustCloseConn()
+
+	// Wait for connection loss event
+	<-connLossCh
+
+	// Wait for reconnect success event
+	<-reconnectSuccessCh
+
+	// Make a request to verify connection is working
+
+	reqData := RequestData{
+		ReqType: PROTO_OA_VERSION_REQ,
+		Req: &ProtoOAVersionReq{
+			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+		},
+		ResType: PROTO_OA_VERSION_RES,
+		Res:     &ProtoOAVersionRes{},
+	}
+
+	if err := h.SendRequest(reqData); err != nil {
+		t.Fatalf("error getting proxy version: %v", err)
+		return
+	}
+
+	if err = h.Disconnect(); err != nil {
 		t.Fatalf("error disconnecting: %v", err)
 	}
 }

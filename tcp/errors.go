@@ -59,3 +59,11 @@ type OperationBlockedError struct {
 func (e *OperationBlockedError) Error() string {
 	return fmt.Sprintf("%s operation blocked: %s", e.CallContext, e.ErrorText)
 }
+
+type MaxReconnectAttemptsReachedError struct {
+	MaxAttempts int
+}
+
+func (e *MaxReconnectAttemptsReachedError) Error() string {
+	return fmt.Sprintf("maximum reconnect attempts (%d) reached", e.MaxAttempts)
+}

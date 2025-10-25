@@ -33,6 +33,10 @@ type TCPClient interface {
 	WithTimeout(timeout time.Duration) TCPClient
 	WithTLS(config *tls.Config) TCPClient
 	WithMessageCallbackChan(onMessageCh chan []byte, onFatalError func(error)) TCPClient
+	WithReconnectDelay(delay time.Duration) TCPClient
+	WithMaxReconnectAttempts(maxAttempts int) TCPClient
+	WithInfiniteReconnectAttempts() TCPClient
+	WithReconnectHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient
 
 	GetTimeout() time.Duration
 
@@ -40,6 +44,7 @@ type TCPClient interface {
 	OpenConn() error
 	CloseConn() error
 	CleanupConn()
+	JustCloseConn()
 
 	Send(data []byte) error
 	Read() ([]byte, error)
@@ -65,7 +70,14 @@ type tcpClient struct {
 	useTLS    bool
 	tlsConfig *tls.Config
 
-	timeout time.Duration
+	timeout          time.Duration
+	reconnectDelay   time.Duration
+	maxReconnects    int
+	reconnectAttempt int
+
+	onConnectionLoss   func()
+	onReconnectSuccess func()
+	onReconnectFail    func(error)
 
 	messageHandling *messageHandling
 }
@@ -76,10 +88,62 @@ func NewTCPClient(address string) TCPClient {
 
 func newTCPClient(address string) *tcpClient {
 	return &tcpClient{
-		mu:      sync.RWMutex{},
-		address: address,
-		timeout: DefaultTimeout,
+		mu:             sync.RWMutex{},
+		address:        address,
+		timeout:        DefaultTimeout,
+		reconnectDelay: DefaultReconnectDelay,
+		maxReconnects:  DefaultMaxReconnects,
 	}
+}
+
+func (c *tcpClient) WithReconnectDelay(delay time.Duration) TCPClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		return c
+	}
+
+	c.reconnectDelay = delay
+	return c
+}
+
+func (c *tcpClient) WithMaxReconnectAttempts(maxAttempts int) TCPClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil || maxAttempts <= 0 {
+		return c
+	}
+
+	c.maxReconnects = maxAttempts
+	return c
+}
+
+func (c *tcpClient) WithInfiniteReconnectAttempts() TCPClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		return c
+	}
+
+	c.maxReconnects = 0
+	return c
+}
+
+func (c *tcpClient) WithReconnectHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		return c
+	}
+
+	c.onConnectionLoss = onConnectionLoss
+	c.onReconnectSuccess = onReconnectSuccess
+	c.onReconnectFail = onReconnectFail
+	return c
 }
 
 func (c *tcpClient) WithTimeout(timeout time.Duration) TCPClient {
@@ -220,7 +284,7 @@ func (c *tcpClient) CloseConn() error {
 		}
 	}
 
-	c.cleanupConn()
+	c.clear()
 
 	return nil
 }
@@ -235,7 +299,16 @@ func (c *tcpClient) CleanupConn() {
 		c.conn.Close()
 	}
 
-	c.cleanupConn()
+	c.clear()
+}
+
+func (c *tcpClient) JustCloseConn() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		c.conn.Close()
+	}
 }
 
 func (c *tcpClient) cleanupMessageHandling() {
@@ -259,7 +332,7 @@ func (c *tcpClient) cleanupMessageHandling() {
 	c.messageHandling = nil
 }
 
-func (c *tcpClient) cleanupConn() {
+func (c *tcpClient) clear() {
 	c.conn = nil
 	c.reader = nil
 
@@ -436,13 +509,82 @@ func (c *tcpClient) handleIncomingMessages(ctx context.Context) {
 		default:
 			payload, err := c.handleIncomingMessage(ctx)
 			if err != nil {
-				go c.messageHandling.onMessageError(err)
-				return
+				if isNetworkFatal(err) {
+					// Fatal network connection error — connection is lost
+					reconnctCh := make(chan struct{})
+					go c.execReconnectLoop(reconnctCh)
+
+					// Wait for reconnct to complete or context cancellation
+					select {
+					case <-ctx.Done():
+						close(reconnctCh)
+						return
+					case <-reconnctCh:
+						// Reconnect completed
+					}
+				} else {
+					// Fatal error (e.g., decoding error)
+					go c.messageHandling.onMessageError(err)
+					return
+				}
 			}
 
 			if payload != nil && c.messageHandling != nil {
 				c.messageHandling.onMessageCh <- payload
 			}
 		}
+	}
+}
+
+func (c *tcpClient) execReconnectLoop(reconnectedCh chan struct{}) {
+	// Cleanup existing connection and notify disconnect
+	if c.onConnectionLoss != nil {
+		c.onConnectionLoss()
+	}
+
+	c.clear()
+
+	c.mu.Lock()
+	c.reconnectAttempt = 0
+	maxAttempts := c.maxReconnects
+	delay := c.reconnectDelay
+	c.mu.Unlock()
+
+	timer := time.NewTimer(0) // immediate first attempt
+	defer timer.Stop()
+
+	for {
+		<-timer.C
+
+		c.mu.Lock()
+		attempt := c.reconnectAttempt
+		if maxAttempts > 0 && attempt >= maxAttempts {
+			go c.messageHandling.onMessageError(&MaxReconnectAttemptsReachedError{
+				MaxAttempts: maxAttempts,
+			})
+
+			c.mu.Unlock()
+			return
+		}
+		c.reconnectAttempt++
+		c.mu.Unlock()
+
+		err := c.OpenConn()
+		if err == nil {
+			if c.onReconnectSuccess != nil {
+				c.onReconnectSuccess()
+			}
+
+			reconnectedCh <- struct{}{}
+			close(reconnectedCh)
+
+			return
+		}
+
+		if c.onReconnectFail != nil {
+			c.onReconnectFail(err)
+		}
+
+		timer.Reset(delay)
 	}
 }

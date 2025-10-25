@@ -21,16 +21,25 @@ import (
 	"fmt"
 )
 
-// ApiHandlerNotConnectedError is returned when an operation that requires
-// an active connection is attempted while the API handler is not
+// APIClientNotConnectedError is returned when an operation that requires
+// an active connection is attempted while the API client is not
 // connected. The CallContext field contains a short description of the
 // call that produced the error (for example "SendRequest").
-type ApiHandlerNotConnectedError struct {
+type APIClientNotConnectedError struct {
 	CallContext string
 }
 
-func (e *ApiHandlerNotConnectedError) Error() string {
-	return fmt.Sprintf("%s: api handler not connected", e.CallContext)
+func (e *APIClientNotConnectedError) Error() string {
+	return fmt.Sprintf("%s: api client not connected", e.CallContext)
+}
+
+// EnqueueOnClosedConnError is returned when an attempt is made to enqueue
+// a request on a closed connection.
+type EnqueueOnClosedConnError struct {
+}
+
+func (e *EnqueueOnClosedConnError) Error() string {
+	return "attempted request enqueue on closed connection"
 }
 
 // ResponseError represents a structured error returned by the server in
@@ -209,3 +218,8 @@ type InvalidAddressError = tcp.InvalidAddressError
 // mutually-exclusive mode is active (for example calling `Read` when a
 // message handler is set on the TCP client).
 type OperationBlockedError = tcp.OperationBlockedError
+
+// MaxReconnectAttemptsReachedError is an alias for `tcp.MaxReconnectAttemptsReachedError`.
+// It is returned when the TCP client has reached the maximum number of configured reconnect
+// attempts without successfully reconnecting.
+type MaxReconnectAttemptsReachedError = tcp.MaxReconnectAttemptsReachedError

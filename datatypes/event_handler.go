@@ -15,57 +15,53 @@
 package datatypes
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/messages"
-
 	"sync"
-
-	"google.golang.org/protobuf/proto"
 )
 
-type Event = proto.Message
+type EventId int32
 
-type EventHandler interface {
-	WithIgnoreIdsNotIncluded() EventHandler
+type EventHandler[T any] interface {
+	WithIgnoreIdsNotIncluded() EventHandler[T]
 
 	Clear()
 
-	HasEvent(eventId messages.ProtoOAPayloadType) bool
-	HandleEvent(eventId messages.ProtoOAPayloadType, event Event) error
-	AddEvent(eventId messages.ProtoOAPayloadType, onEvent func(proto.Message)) error
-	RemoveEvent(eventId messages.ProtoOAPayloadType) error
+	HasEvent(eventId EventId) bool
+	HandleEvent(eventId EventId, event T) error
+	AddEvent(eventId EventId, onEvent func(T)) error
+	RemoveEvent(eventId EventId) error
 }
 
-type eventHandler struct {
+type eventHandler[T any] struct {
 	mu                   sync.RWMutex
-	eventsMap            map[messages.ProtoOAPayloadType]func(Event)
+	eventsMap            map[EventId]func(T)
 	ignoreIdsNotIncluded bool
 }
 
-func NewEventHandler() EventHandler {
-	return newEventHandler()
+func NewEventHandler[T any]() EventHandler[T] {
+	return newEventHandler[T]()
 }
 
-func newEventHandler() *eventHandler {
-	return &eventHandler{
+func newEventHandler[T any]() *eventHandler[T] {
+	return &eventHandler[T]{
 		mu:                   sync.RWMutex{},
-		eventsMap:            make(map[messages.ProtoOAPayloadType]func(Event)),
+		eventsMap:            make(map[EventId]func(T)),
 		ignoreIdsNotIncluded: false,
 	}
 }
 
-func (h *eventHandler) WithIgnoreIdsNotIncluded() EventHandler {
+func (h *eventHandler[T]) WithIgnoreIdsNotIncluded() EventHandler[T] {
 	h.ignoreIdsNotIncluded = true
 	return h
 }
 
-func (h *eventHandler) Clear() {
+func (h *eventHandler[T]) Clear() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.eventsMap = make(map[messages.ProtoOAPayloadType]func(Event))
+	h.eventsMap = make(map[EventId]func(T))
 }
 
-func (h *eventHandler) HasEvent(eventId messages.ProtoOAPayloadType) bool {
+func (h *eventHandler[T]) HasEvent(eventId EventId) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -73,7 +69,7 @@ func (h *eventHandler) HasEvent(eventId messages.ProtoOAPayloadType) bool {
 	return exists
 }
 
-func (h *eventHandler) HandleEvent(eventId messages.ProtoOAPayloadType, event Event) error {
+func (h *eventHandler[T]) HandleEvent(eventId EventId, event T) error {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -84,7 +80,7 @@ func (h *eventHandler) HandleEvent(eventId messages.ProtoOAPayloadType, event Ev
 		}
 
 		return &IdNotIncludedError{
-			Id: string(eventId),
+			Id: eventId,
 		}
 	}
 
@@ -96,14 +92,14 @@ func (h *eventHandler) HandleEvent(eventId messages.ProtoOAPayloadType, event Ev
 }
 
 // Event: Live Trendbars
-func (h *eventHandler) AddEvent(eventId messages.ProtoOAPayloadType, onEvent func(Event)) error {
+func (h *eventHandler[T]) AddEvent(eventId EventId, onEvent func(T)) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// Check if already added
 	if _, exists := h.eventsMap[eventId]; exists {
 		return &IdAlreadyIncludedError{
-			Id: string(eventId),
+			Id: eventId,
 		}
 	}
 
@@ -112,14 +108,14 @@ func (h *eventHandler) AddEvent(eventId messages.ProtoOAPayloadType, onEvent fun
 
 	return nil
 }
-func (h *eventHandler) RemoveEvent(eventId messages.ProtoOAPayloadType) error {
+func (h *eventHandler[T]) RemoveEvent(eventId EventId) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// Check if not subscribed
 	if _, exists := h.eventsMap[eventId]; !exists {
 		return &IdNotIncludedError{
-			Id: string(eventId),
+			Id: eventId,
 		}
 	}
 

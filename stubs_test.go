@@ -15,8 +15,6 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/messages"
-
 	"context"
 	"fmt"
 	"os"
@@ -68,26 +66,26 @@ func loadTestAccountCredentials() (int64, string, Environment, error) {
 	return accountId, strAccessToken, env, nil
 }
 
-func createApiHandler(env Environment) (*apiHandler, error) {
+func createApiClient(env Environment) (*apiClient, error) {
 	cred, err := LoadAppCredentialsFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("invalid credentials: %v", err)
 	}
 
-	h, err := newApiHandler(cred, env)
+	h, err := newApiClient(cred, env)
 	if err != nil {
-		return nil, fmt.Errorf("error creating handler: %v", err)
+		return nil, fmt.Errorf("error creating client: %v", err)
 	}
 
 	return h, nil
 }
 
-func autheticateAccount(h *apiHandler, ctid int64, accessToken string) (*ProtoOAAccountAuthRes, error) {
-	req := messages.ProtoOAAccountAuthReq{
+func autheticateAccount(h *apiClient, ctid int64, accessToken string) (*ProtoOAAccountAuthRes, error) {
+	req := ProtoOAAccountAuthReq{
 		CtidTraderAccountId: proto.Int64(ctid),
 		AccessToken:         proto.String(accessToken),
 	}
-	var res messages.ProtoOAAccountAuthRes
+	var res ProtoOAAccountAuthRes
 
 	reqCtx := context.Background()
 

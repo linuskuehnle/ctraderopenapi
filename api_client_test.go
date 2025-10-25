@@ -15,8 +15,6 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/messages"
-
 	"context"
 	"errors"
 	"sync"
@@ -26,8 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestHandlerConnectDisconnect(t *testing.T) {
-	h, err := createApiHandler(Environment_Demo)
+func TestClientConnectDisconnect(t *testing.T) {
+	h, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,27 +39,8 @@ func TestHandlerConnectDisconnect(t *testing.T) {
 	}
 }
 
-func TestHandlerConnectDisconnectReconnect(t *testing.T) {
-	h, err := createApiHandler(Environment_Demo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = h.Connect(); err != nil {
-		t.Fatalf("error connecting: %v", err)
-	}
-
-	if err = h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
-	}
-
-	if err = h.Reconnect(); err != nil {
-		t.Fatalf("error reconnecting: %v", err)
-	}
-}
-
-func TestHandlerConnectHeartbeatDisconnect(t *testing.T) {
-	h, err := createApiHandler(Environment_Demo)
+func TestClientConnectHeartbeatDisconnect(t *testing.T) {
+	h, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +58,8 @@ func TestHandlerConnectHeartbeatDisconnect(t *testing.T) {
 	}
 }
 
-func TestHandlerReqConcurrency(t *testing.T) {
-	h, err := createApiHandler(Environment_Demo)
+func TestClientReqConcurrency(t *testing.T) {
+	h, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,10 +79,10 @@ func TestHandlerReqConcurrency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			req := messages.ProtoOAVersionReq{
+			req := ProtoOAVersionReq{
 				PayloadType: PROTO_OA_VERSION_REQ.Enum(),
 			}
-			var res messages.ProtoOAVersionRes
+			var res ProtoOAVersionRes
 
 			reqCtx := context.Background()
 
@@ -143,7 +122,7 @@ func TestProtoOAErrorResponse(t *testing.T) {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
 
-	h, err := createApiHandler(env)
+	h, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,12 +132,12 @@ func TestProtoOAErrorResponse(t *testing.T) {
 	}
 
 	// Make unauthenticated request that will return a proto error response
-	req := messages.ProtoOAGetTrendbarsReq{
+	req := ProtoOAGetTrendbarsReq{
 		CtidTraderAccountId: proto.Int64(accountId),
 		Period:              ProtoOATrendbarPeriod_D1.Enum(),
 		SymbolId:            proto.Int64(1),
 	}
-	var res messages.ProtoOAGetTrendbarsRes
+	var res ProtoOAGetTrendbarsRes
 
 	reqCtx := context.Background()
 
@@ -171,7 +150,8 @@ func TestProtoOAErrorResponse(t *testing.T) {
 	}
 
 	if err = h.SendRequest(reqData); err != nil {
-		if _, ok := err.(*ResponseError); !ok {
+		var respErr *ResponseError
+		if !errors.As(err, &respErr) {
 			t.Fatalf("unexpected error of type RequestError. got: %v", err)
 		}
 	} else {
@@ -184,7 +164,7 @@ func TestProtoOAErrorResponse(t *testing.T) {
 }
 
 func TestFatalError(t *testing.T) {
-	h, err := createApiHandler(Environment_Demo)
+	h, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +192,7 @@ func TestFatalError(t *testing.T) {
 }
 
 func TestHeartbeatEmission(t *testing.T) {
-	h, err := createApiHandler(Environment_Demo)
+	h, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +215,7 @@ func TestAccountAuth(t *testing.T) {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
 
-	h, err := createApiHandler(env)
+	h, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +243,7 @@ func TestGetSymbols(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiHandler(env)
+	h, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,12 +258,12 @@ func TestGetSymbols(t *testing.T) {
 
 	reqData := RequestData{
 		ReqType: PROTO_OA_SYMBOLS_LIST_REQ,
-		Req: &messages.ProtoOASymbolsListReq{
+		Req: &ProtoOASymbolsListReq{
 			CtidTraderAccountId:    proto.Int64(accountId),
 			IncludeArchivedSymbols: proto.Bool(false),
 		},
 		ResType: PROTO_OA_SYMBOLS_LIST_RES,
-		Res:     &messages.ProtoOASymbolsListRes{},
+		Res:     &ProtoOASymbolsListRes{},
 	}
 
 	if err = h.SendRequest(reqData); err != nil {
@@ -291,6 +271,67 @@ func TestGetSymbols(t *testing.T) {
 	}
 
 	if err := h.Disconnect(); err != nil {
+		t.Fatalf("error disconnecting: %v", err)
+	}
+}
+
+func TestReconnect(t *testing.T) {
+	h, err := createApiClient(Environment_Demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var once1 sync.Once
+	var once2 sync.Once
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	onConnectionLoss := func() {
+		once1.Do(func() {
+			t.Log("closed tcp conn. waiting for reconnect...")
+		})
+	}
+	onReconnectSuccess := func() {
+		// On reconnect success
+		t.Log("reconnect successful")
+
+		once2.Do(func() {
+			wg.Done()
+		})
+	}
+	onReconnectFail := func(err error) {
+		// On reconnect failure
+		t.Logf("reconnect failed: %v", err)
+	}
+
+	h.tcpClient.WithReconnectHooks(onConnectionLoss, onReconnectSuccess, onReconnectFail)
+
+	if err = h.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+
+	h.tcpClient.JustCloseConn()
+
+	// Wait for reconnect to complete
+	wg.Wait()
+
+	// Make a request to verify connection is working
+
+	reqData := RequestData{
+		ReqType: PROTO_OA_VERSION_REQ,
+		Req: &ProtoOAVersionReq{
+			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+		},
+		ResType: PROTO_OA_VERSION_RES,
+		Res:     &ProtoOAVersionRes{},
+	}
+
+	if err := h.SendRequest(reqData); err != nil {
+		t.Fatalf("error getting proxy version: %v", err)
+		return
+	}
+
+	if err = h.Disconnect(); err != nil {
 		t.Fatalf("error disconnecting: %v", err)
 	}
 }

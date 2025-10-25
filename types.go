@@ -21,8 +21,8 @@ import (
 	"time"
 )
 
-// APIHandlerConfig configures runtime buffer sizes and timeouts used by
-// the API handler. These values provide reasonable defaults but can be
+// APIClientConfig configures runtime buffer sizes and timeouts used by
+// the API client. These values provide reasonable defaults but can be
 // adjusted with `WithConfig` before calling `Connect`.
 //
 // Fields:
@@ -32,17 +32,17 @@ import (
 //     TCP messages from the network reader.
 //   - RequestHeapIterationTimeout: interval used by the request heap to
 //     periodically check for expired request contexts.
-type APIHandlerConfig struct {
+type APIClientConfig struct {
 	QueueBufferSize             int
 	TCPMessageBufferSize        int
 	RequestHeapIterationTimeout time.Duration
 }
 
-// DefaultApiHandlerConfig returns a configuration with conservative,
+// DefaultAPIClientConfig returns a configuration with conservative,
 // production-suitable defaults. Callers may modify the returned struct
-// and pass it to `WithConfig` on the API handler before connecting.
-func DefaultAPIHandlerConfig() APIHandlerConfig {
-	return APIHandlerConfig{
+// and pass it to `WithConfig` on the API client before connecting.
+func DefaultAPIClientConfig() APIClientConfig {
+	return APIClientConfig{
 		QueueBufferSize:             DefaultQueueBufferSize,
 		TCPMessageBufferSize:        DefaultTCPMessageBufferSize,
 		RequestHeapIterationTimeout: DefaultRequestHeapIterationTimeout,
@@ -67,10 +67,13 @@ func (env Environment) GetAddress() endpointAddress {
 	}
 }
 
-// Representation of the cTrader account id.
+// CtraderAccountId represents a cTrader account identifier.
+// It is a thin typed alias over int64 to make call sites explicit.
 type CtraderAccountId int64
 
-// CheckError checks if id is a valid cTrader accoutn id. Returns an error if it is invalid.
+// CheckError validates the account id. It returns a non-nil error when
+// the id is invalid (zero). Additional validation rules can be added
+// later if required.
 func (id CtraderAccountId) CheckError() error {
 	if id == 0 {
 		return fmt.Errorf("cTrader account ID must not be empty")
@@ -81,13 +84,17 @@ func (id CtraderAccountId) CheckError() error {
 	return nil
 }
 
-// ApplicationCredentials holds the client ID and client secret for the application.
+// ApplicationCredentials holds the client credentials required to
+// authenticate the application with the cTrader OpenAPI proxy.
+// Both fields are required.
 type ApplicationCredentials struct {
 	ClientId     string
 	ClientSecret string
 }
 
-// CheckError checks if the credentials are valid. Returns an error if they are invalid.
+// CheckError validates the ApplicationCredentials, returning a
+// descriptive error when either the client id or client secret are
+// missing.
 func (c ApplicationCredentials) CheckError() error {
 	if c.ClientId == "" {
 		return fmt.Errorf("client ID must not be empty")
@@ -98,13 +105,10 @@ func (c ApplicationCredentials) CheckError() error {
 	return nil
 }
 
-// EnqueueOnClosedConnError is returned when an attempt is made to enqueue a request on a closed connection.
-type EnqueueOnClosedConnError struct {
-}
-
-func (e *EnqueueOnClosedConnError) Error() string {
-	return "attempted request enqueue on closed connection"
-}
+// Event types for ListenToEvent and ListenToClientEvent
+// Use these typed aliases to make intent explicit in public APIs.
+type eventType datatypes.EventId
+type clientEventType datatypes.EventId
 
 // RequestData is the argument struct for SendRequest.
 //   - Ctx: Request context. If context.Err() is not nil, the request response will not be awaited or if the
@@ -127,14 +131,30 @@ type ListenableEvent interface {
 	IsListenableEvent()
 }
 
+type ListenableClientEvent interface {
+	IsListenableClientEvent()
+}
+
 // CastToEventType attempts to cast a generic `ListenableEvent` to the
 // concrete typed event `T`. It returns the typed value and `true` if the
 // assertion succeeded; otherwise it returns the zero value and `false`.
 //
 // This helper is commonly used by small adapter goroutines that accept a
 // generic `ListenableEvent` channel but want to call a typed handler
-// (for example converting `ListenableEvent` to `*messages.ProtoOASpotEvent`).
+// (for example converting `ListenableEvent` to `*ProtoOASpotEvent`).
 func CastToEventType[T ListenableEvent](event ListenableEvent) (T, bool) {
+	t, ok := event.(T)
+	return t, ok
+}
+
+// CastToClientEventType attempts to cast a generic `ListenableClientEvent` to the
+// concrete typed event `T`. It returns the typed value and `true` if the
+// assertion succeeded; otherwise it returns the zero value and `false`.
+//
+// This helper is commonly used by small adapter goroutines that accept a
+// generic `ListenableClientEvent` channel but want to call a typed handler
+// (for example converting `ListenableClientEvent` to `*ReconnectSuccessEvent`).
+func CastToClientEventType[T ListenableClientEvent](event ListenableClientEvent) (T, bool) {
 	t, ok := event.(T)
 	return t, ok
 }
@@ -226,3 +246,30 @@ func (d *SubscriptionDataDepthQuoteEvent) CheckError() error {
 
 	return nil
 }
+
+/*
+API Client event types
+*/
+
+// ConnectionLossEvent is emitted when the TCP connection to the
+// cTrader OpenAPI server is unexpectedly lost. Listeners may use this
+// to trigger local reconnection logic or cleanup.
+type ConnectionLossEvent struct{}
+
+func (e *ConnectionLossEvent) IsListenableClientEvent() {}
+
+// ReconnectSuccessEvent is emitted after a successful reconnect and
+// re-authentication cycle. It indicates the client is operational
+// again.
+type ReconnectSuccessEvent struct{}
+
+func (e *ReconnectSuccessEvent) IsListenableClientEvent() {}
+
+// ReconnectFailEvent is emitted when the client's reconnect loop fails
+// repeatedly and gives up (or when an error occurs during reconnect).
+// The `Err` field contains the underlying error.
+type ReconnectFailEvent struct {
+	Err error
+}
+
+func (e *ReconnectFailEvent) IsListenableClientEvent() {}

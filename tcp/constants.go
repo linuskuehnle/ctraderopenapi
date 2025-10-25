@@ -19,5 +19,7 @@ import (
 )
 
 const (
-	DefaultTimeout = 5 * time.Second
+	DefaultTimeout        = 5 * time.Second
+	DefaultReconnectDelay = 1 * time.Second
+	DefaultMaxReconnects  = 0 // 0 means infinite reconnect attempts
 )

@@ -36,20 +36,20 @@ func (e *RequestContextExpiredError) Error() string {
 }
 
 type IdAlreadyIncludedError struct {
-	Id        string
+	Id        EventId
 	EventName string
 }
 
 func (e *IdAlreadyIncludedError) Error() string {
-	return fmt.Sprintf("id %s is already included in event handler %s", e.Id, e.EventName)
+	return fmt.Sprintf("id %d is already included in event handler %s", e.Id, e.EventName)
 }
 
 type IdNotIncludedError struct {
-	Id string
+	Id EventId
 }
 
 func (e *IdNotIncludedError) Error() string {
-	return fmt.Sprintf("id %s is not included in event handler", e.Id)
+	return fmt.Sprintf("id %d is not included in event handler", e.Id)
 }
 
 type LifeCycleAlreadyRunningError struct {
