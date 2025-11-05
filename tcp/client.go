@@ -70,10 +70,9 @@ type tcpClient struct {
 	useTLS    bool
 	tlsConfig *tls.Config
 
-	timeout          time.Duration
-	reconnectDelay   time.Duration
-	maxReconnects    int
-	reconnectAttempt int
+	timeout        time.Duration
+	reconnectDelay time.Duration
+	maxReconnects  int
 
 	onConnectionLoss   func()
 	onReconnectSuccess func()
@@ -210,6 +209,11 @@ func (c *tcpClient) OpenConn() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.conn != nil {
+		return &OpenConnectionError{
+			ErrorText: "connection is already open",
+		}
+	}
 	host, _, err := splitAddress(c.address)
 	if err != nil {
 		return &datatypes.FunctionInvalidArgError{
@@ -218,10 +222,23 @@ func (c *tcpClient) OpenConn() error {
 		}
 	}
 
-	if c.conn != nil {
-		return &OpenConnectionError{
-			ErrorText: "connection is already open",
-		}
+	if err := c.establishConn(host); err != nil {
+		return err
+	}
+
+	c.connCtx, c.connCtxCancel = context.WithCancel(context.Background())
+
+	if c.messageHandling != nil {
+		// Start a goroutine to handle incoming messages
+		go c.handleIncomingMessages(c.connCtx)
+	}
+
+	return nil
+}
+
+func (c *tcpClient) establishConn(host string) error {
+	if host == "" {
+		host, _, _ = splitAddress(c.address)
 	}
 
 	// Check if TLS is enabled and config is provided
@@ -255,13 +272,6 @@ func (c *tcpClient) OpenConn() error {
 
 	c.conn = tlsConn
 	c.reader = bufio.NewReader(c.conn)
-
-	c.connCtx, c.connCtxCancel = context.WithCancel(context.Background())
-
-	if c.messageHandling != nil {
-		// Start a goroutine to handle incoming messages
-		go c.handleIncomingMessages(c.connCtx)
-	}
 
 	return nil
 }
@@ -512,15 +522,13 @@ func (c *tcpClient) handleIncomingMessages(ctx context.Context) {
 				if isNetworkFatal(err) {
 					// Fatal network connection error — connection is lost
 					reconnctCh := make(chan struct{})
-					go c.execReconnectLoop(reconnctCh)
+					go c.execReconnectLoop(ctx, reconnctCh)
 
-					// Wait for reconnct to complete or context cancellation
-					select {
-					case <-ctx.Done():
-						close(reconnctCh)
+					// Wait for reconnct to complete
+					_, ok := <-reconnctCh
+					if !ok {
+						// Reconnect failed or context has been cancelled. No reconnect message has been sent.
 						return
-					case <-reconnctCh:
-						// Reconnect completed
 					}
 				} else {
 					// Fatal error (e.g., decoding error)
@@ -536,55 +544,66 @@ func (c *tcpClient) handleIncomingMessages(ctx context.Context) {
 	}
 }
 
-func (c *tcpClient) execReconnectLoop(reconnectedCh chan struct{}) {
-	// Cleanup existing connection and notify disconnect
-	if c.onConnectionLoss != nil {
-		c.onConnectionLoss()
-	}
-
-	c.clear()
-
+func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan struct{}) {
 	c.mu.Lock()
-	c.reconnectAttempt = 0
+
+	c.conn = nil
+	c.reader = nil
+
+	onConnectionLoss := c.onConnectionLoss
+	onReconnectSuccess := c.onReconnectSuccess
+	onReconnectFail := c.onReconnectFail
+
+	reconnectAttempt := 0
 	maxAttempts := c.maxReconnects
 	delay := c.reconnectDelay
 	c.mu.Unlock()
 
+	if onConnectionLoss != nil {
+		onConnectionLoss()
+	}
+
 	timer := time.NewTimer(0) // immediate first attempt
 	defer timer.Stop()
 
+	defer close(reconnectedCh) // Ensure channel is always closed on all exit paths
+
 	for {
-		<-timer.C
-
-		c.mu.Lock()
-		attempt := c.reconnectAttempt
-		if maxAttempts > 0 && attempt >= maxAttempts {
-			go c.messageHandling.onMessageError(&MaxReconnectAttemptsReachedError{
-				MaxAttempts: maxAttempts,
-			})
-
-			c.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			// Context canceled during reconnect - clean shutdown
 			return
-		}
-		c.reconnectAttempt++
-		c.mu.Unlock()
+		case <-timer.C:
+			if maxAttempts > 0 {
+				if reconnectAttempt >= maxAttempts {
+					go c.messageHandling.onMessageError(&MaxReconnectAttemptsReachedError{
+						MaxAttempts: maxAttempts,
+					})
+					return
+				}
 
-		err := c.OpenConn()
-		if err == nil {
-			if c.onReconnectSuccess != nil {
-				c.onReconnectSuccess()
+				reconnectAttempt++
 			}
 
-			reconnectedCh <- struct{}{}
-			close(reconnectedCh)
+			c.mu.Lock()
+			err := c.establishConn("")
+			if err == nil {
+				c.mu.Unlock()
 
-			return
+				if onReconnectSuccess != nil {
+					onReconnectSuccess()
+				}
+
+				reconnectedCh <- struct{}{} // Signal successful reconnect before closing
+				return
+			}
+			c.mu.Unlock()
+
+			if onReconnectFail != nil {
+				onReconnectFail(err)
+			}
+
+			timer.Reset(delay)
 		}
-
-		if c.onReconnectFail != nil {
-			c.onReconnectFail(err)
-		}
-
-		timer.Reset(delay)
 	}
 }
