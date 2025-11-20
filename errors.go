@@ -70,6 +70,10 @@ func (e *ResponseError) Error() string {
 	return errText
 }
 
+func (e *ResponseError) IsOngoingMaintenance() bool {
+	return e.MaintenanceEndTimestamp != 0
+}
+
 // GenericResponseError is used when the server returns an error that
 // cannot be mapped to a more specific client-side error type. It carries
 // an ErrorCode and optional Description and MaintenanceEndTimestamp to
@@ -90,6 +94,10 @@ func (e *GenericResponseError) Error() string {
 			e.MaintenanceEndTimestamp)
 	}
 	return errText
+}
+
+func (e *GenericResponseError) IsOngoingMaintenance() bool {
+	return e.MaintenanceEndTimestamp != 0
 }
 
 // UnexpectedMessageTypeError is returned when an incoming message from
