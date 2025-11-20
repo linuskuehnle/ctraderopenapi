@@ -235,7 +235,8 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		WithTimeout(time.Millisecond*100).
 		WithReconnectDelay(time.Millisecond*500).
 		WithInfiniteReconnectAttempts().
-		WithReconnectHooks(h.connectionLossCallback, h.reconnectSuccessCallback, h.reconnectFailCallback)
+		WithReconnectCallback(h.onReconnect).
+		WithConnEventHooks(h.connectionLossCallback, h.reconnectSuccessCallback, h.reconnectFailCallback)
 
 	h.WithConfig(DefaultAPIClientConfig())
 
@@ -408,17 +409,23 @@ func (h *apiClient) onFatalError(err error) {
 	h.fatalErrCh = nil
 }
 
+func (h *apiClient) onReconnect(errCh chan error) {
+	defer close(errCh)
+
+	if err := h.authenticateApp(); err != nil {
+		errCh <- err
+		return
+	}
+
+	errCh <- nil
+}
+
 func (h *apiClient) connectionLossCallback() {
 	event := &ConnectionLossEvent{}
 	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ConnectionLossEvent), event)
 }
 
 func (h *apiClient) reconnectSuccessCallback() {
-	if err := h.authenticateApp(); err != nil {
-		h.fatalErrCh <- err
-		return
-	}
-
 	event := &ReconnectSuccessEvent{}
 	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectSuccessEvent), event)
 }

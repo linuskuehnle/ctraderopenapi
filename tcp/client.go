@@ -36,7 +36,8 @@ type TCPClient interface {
 	WithReconnectDelay(delay time.Duration) TCPClient
 	WithMaxReconnectAttempts(maxAttempts int) TCPClient
 	WithInfiniteReconnectAttempts() TCPClient
-	WithReconnectHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient
+	WithReconnectCallback(onReconnect func(chan error)) TCPClient
+	WithConnEventHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient
 
 	GetTimeout() time.Duration
 
@@ -73,6 +74,8 @@ type tcpClient struct {
 	timeout        time.Duration
 	reconnectDelay time.Duration
 	maxReconnects  int
+
+	onReconnect func(chan error)
 
 	onConnectionLoss   func()
 	onReconnectSuccess func()
@@ -131,7 +134,19 @@ func (c *tcpClient) WithInfiniteReconnectAttempts() TCPClient {
 	return c
 }
 
-func (c *tcpClient) WithReconnectHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient {
+func (c *tcpClient) WithReconnectCallback(onReconnect func(chan error)) TCPClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil || onReconnect == nil {
+		return c
+	}
+
+	c.onReconnect = onReconnect
+	return c
+}
+
+func (c *tcpClient) WithConnEventHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -521,15 +536,35 @@ func (c *tcpClient) handleIncomingMessages(ctx context.Context) {
 			if err != nil {
 				if isNetworkFatal(err) {
 					// Fatal network connection error — connection is lost
-					reconnctCh := make(chan struct{})
-					go c.execReconnectLoop(ctx, reconnctCh)
+					reconnectCh := make(chan struct{})
+					go c.execReconnectLoop(ctx, reconnectCh)
 
-					// Wait for reconnct to complete
-					_, ok := <-reconnctCh
+					// Wait for reconnectCh to complete
+					_, ok := <-reconnectCh
 					if !ok {
 						// Reconnect failed or context has been cancelled. No reconnect message has been sent.
 						return
 					}
+
+					// Call reconnect callback
+					errCh := make(chan error)
+
+					// Handle reconnect result
+					go func() {
+						err := <-errCh
+						if err != nil {
+							// Reconnect failed, call fail hook
+							c.handleReconnectFail(err)
+							return
+						}
+
+						// Reconnect successful, call success hook
+						if c.onReconnectSuccess != nil {
+							c.onReconnectSuccess()
+						}
+					}()
+
+					go c.onReconnect(errCh)
 				} else {
 					// Fatal error (e.g., decoding error)
 					go c.messageHandling.onMessageError(err)
@@ -550,17 +585,13 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 	c.conn = nil
 	c.reader = nil
 
-	onConnectionLoss := c.onConnectionLoss
-	onReconnectSuccess := c.onReconnectSuccess
-	onReconnectFail := c.onReconnectFail
-
 	reconnectAttempt := 0
 	maxAttempts := c.maxReconnects
 	delay := c.reconnectDelay
 	c.mu.Unlock()
 
-	if onConnectionLoss != nil {
-		onConnectionLoss()
+	if c.onConnectionLoss != nil {
+		c.onConnectionLoss()
 	}
 
 	timer := time.NewTimer(0) // immediate first attempt
@@ -590,20 +621,22 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 			if err == nil {
 				c.mu.Unlock()
 
-				if onReconnectSuccess != nil {
-					onReconnectSuccess()
-				}
-
 				reconnectedCh <- struct{}{} // Signal successful reconnect before closing
 				return
 			}
 			c.mu.Unlock()
 
-			if onReconnectFail != nil {
-				onReconnectFail(err)
-			}
+			c.handleReconnectFail(err)
 
 			timer.Reset(delay)
 		}
+	}
+}
+
+func (c *tcpClient) handleReconnectFail(err error) {
+	if c.onReconnectFail != nil {
+		c.onReconnectFail(err)
+	} else {
+		go c.messageHandling.onMessageError(err)
 	}
 }

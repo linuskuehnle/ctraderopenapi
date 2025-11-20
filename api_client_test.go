@@ -286,12 +286,18 @@ func TestReconnect(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	onConnectionLoss := func() {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	onConnLossCh := make(chan ListenableClientEvent)
+	onReconnectSuccessCh := make(chan ListenableClientEvent)
+	onReconnectFailCh := make(chan ListenableClientEvent)
+
+	onConnectionLoss := func(e *ConnectionLossEvent) {
 		once1.Do(func() {
 			t.Log("closed tcp conn. waiting for reconnect...")
 		})
 	}
-	onReconnectSuccess := func() {
+	onReconnectSuccess := func(e *ReconnectSuccessEvent) {
 		// On reconnect success
 		t.Log("reconnect successful")
 
@@ -299,12 +305,30 @@ func TestReconnect(t *testing.T) {
 			wg.Done()
 		})
 	}
-	onReconnectFail := func(err error) {
+	onReconnectFail := func(e *ReconnectFailEvent) {
 		// On reconnect failure
-		t.Logf("reconnect failed: %v", err)
+		t.Logf("reconnect failed: %v", e.Err)
 	}
 
-	h.tcpClient.WithReconnectHooks(onConnectionLoss, onReconnectSuccess, onReconnectFail)
+	if err := h.ListenToClientEvent(ClientEventType_ConnectionLossEvent, onConnLossCh, ctx); err != nil {
+		t.Fatalf("error listening to connection loss events: %v", err)
+	}
+	if err := h.ListenToClientEvent(ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh, ctx); err != nil {
+		t.Fatalf("error listening to reconnect success events: %v", err)
+	}
+	if err := h.ListenToClientEvent(ClientEventType_ReconnectFailEvent, onReconnectFailCh, ctx); err != nil {
+		t.Fatalf("error listening to reconnect failure events: %v", err)
+	}
+
+	if err := SpawnClientEventHandler(ctx, onConnLossCh, onConnectionLoss); err != nil {
+		t.Fatalf("error spawning connection loss event handler: %v", err)
+	}
+	if err := SpawnClientEventHandler(ctx, onReconnectSuccessCh, onReconnectSuccess); err != nil {
+		t.Fatalf("error spawning reconnect success event handler: %v", err)
+	}
+	if err := SpawnClientEventHandler(ctx, onReconnectFailCh, onReconnectFail); err != nil {
+		t.Fatalf("error spawning reconnect failure event handler: %v", err)
+	}
 
 	if err = h.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
@@ -314,6 +338,7 @@ func TestReconnect(t *testing.T) {
 
 	// Wait for reconnect to complete
 	wg.Wait()
+	cancel()
 
 	// Make a request to verify connection is working
 
