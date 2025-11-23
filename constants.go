@@ -127,7 +127,8 @@ const (
 
 const (
 	// API Client events
-	ClientEventType_ConnectionLossEvent clientEventType = iota
+	ClientEventType_FatalErrorEvent clientEventType = iota
+	ClientEventType_ConnectionLossEvent
 	ClientEventType_ReconnectSuccessEvent
 	ClientEventType_ReconnectFailEvent
 )

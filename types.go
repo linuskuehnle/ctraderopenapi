@@ -251,6 +251,17 @@ func (d *SubscriptionDataDepthQuoteEvent) CheckError() error {
 API Client event types
 */
 
+// FatalErrorEvent is emitted when a fatal error occurs in the API client.
+// The `Err` field contains the underlying error.
+//
+// Listeners may use this event to trigger application-level shutdown
+// or cleanup logic.
+type FatalErrorEvent struct {
+	Err error
+}
+
+func (e *FatalErrorEvent) IsListenableClientEvent() {}
+
 // ConnectionLossEvent is emitted when the TCP connection to the
 // cTrader OpenAPI server is unexpectedly lost. Listeners may use this
 // to trigger local reconnection logic or cleanup.

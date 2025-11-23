@@ -21,20 +21,17 @@ import (
 type EventId int32
 
 type EventHandler[T any] interface {
-	WithIgnoreIdsNotIncluded() EventHandler[T]
-
 	Clear()
 
 	HasEvent(eventId EventId) bool
-	HandleEvent(eventId EventId, event T) error
+	HandleEvent(eventId EventId, event T) bool
 	AddEvent(eventId EventId, onEvent func(T)) error
 	RemoveEvent(eventId EventId) error
 }
 
 type eventHandler[T any] struct {
-	mu                   sync.RWMutex
-	eventsMap            map[EventId]func(T)
-	ignoreIdsNotIncluded bool
+	mu        sync.RWMutex
+	eventsMap map[EventId]func(T)
 }
 
 func NewEventHandler[T any]() EventHandler[T] {
@@ -43,15 +40,9 @@ func NewEventHandler[T any]() EventHandler[T] {
 
 func newEventHandler[T any]() *eventHandler[T] {
 	return &eventHandler[T]{
-		mu:                   sync.RWMutex{},
-		eventsMap:            make(map[EventId]func(T)),
-		ignoreIdsNotIncluded: false,
+		mu:        sync.RWMutex{},
+		eventsMap: make(map[EventId]func(T)),
 	}
-}
-
-func (h *eventHandler[T]) WithIgnoreIdsNotIncluded() EventHandler[T] {
-	h.ignoreIdsNotIncluded = true
-	return h
 }
 
 func (h *eventHandler[T]) Clear() {
@@ -69,26 +60,20 @@ func (h *eventHandler[T]) HasEvent(eventId EventId) bool {
 	return exists
 }
 
-func (h *eventHandler[T]) HandleEvent(eventId EventId, event T) error {
+func (h *eventHandler[T]) HandleEvent(eventId EventId, event T) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	onEvent, exists := h.eventsMap[eventId]
 	if !exists {
-		if h.ignoreIdsNotIncluded {
-			return nil
-		}
-
-		return &IdNotIncludedError{
-			Id: eventId,
-		}
+		return false
 	}
 
 	if onEvent != nil {
 		onEvent(event)
 	}
 
-	return nil
+	return true
 }
 
 // Event: Live Trendbars

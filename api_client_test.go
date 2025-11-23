@@ -163,15 +163,30 @@ func TestProtoOAErrorResponse(t *testing.T) {
 	}
 }
 
-func TestFatalError(t *testing.T) {
+func TestListenToFatalError(t *testing.T) {
 	h, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	errCh, err := h.MakeFatalErrChan()
-	if err != nil {
-		t.Fatalf("error creating fatal error channel: %v", err)
+	ctx, cancel := context.WithCancel(context.Background())
+	var once sync.Once
+
+	onFatalErrCh := make(chan ListenableClientEvent)
+	onFatalErr := func(e *FatalErrorEvent) {
+		fatalErr := e.Err
+		if fatalErr.Error() != "test fatal error" {
+			t.Fatalf("expected fatal error 'test fatal error', got: %v", fatalErr)
+		}
+		once.Do(func() {
+			cancel()
+		})
+	}
+	if err := h.ListenToClientEvent(ClientEventType_FatalErrorEvent, onFatalErrCh, ctx); err != nil {
+		t.Fatalf("error listening to fatal error client event: %v", err)
+	}
+	if err := SpawnClientEventHandler(ctx, onFatalErrCh, onFatalErr); err != nil {
+		t.Fatalf("error spawning client event handler: %v", err)
 	}
 
 	if err = h.Connect(); err != nil {
@@ -179,14 +194,11 @@ func TestFatalError(t *testing.T) {
 	}
 
 	// Manually trigger a fatal error
-	h.onFatalError(errors.New("test fatal error"))
+	h.fatalErrCh <- errors.New("test fatal error")
 
 	select {
-	case fe := <-errCh:
-		if fe.Error() != "test fatal error" {
-			t.Fatalf("expected fatal error 'test fatal error', got: %v", fe)
-		}
-	case <-time.After(2 * time.Second):
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for fatal error")
 	}
 }

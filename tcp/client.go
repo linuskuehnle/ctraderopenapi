@@ -36,7 +36,7 @@ type TCPClient interface {
 	WithReconnectDelay(delay time.Duration) TCPClient
 	WithMaxReconnectAttempts(maxAttempts int) TCPClient
 	WithInfiniteReconnectAttempts() TCPClient
-	WithReconnectCallback(onReconnect func(chan error)) TCPClient
+	WithReconnectAttemptHook(onReconnectAttempt func(chan error)) TCPClient
 	WithConnEventHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient
 
 	GetTimeout() time.Duration
@@ -75,7 +75,7 @@ type tcpClient struct {
 	reconnectDelay time.Duration
 	maxReconnects  int
 
-	onReconnect func(chan error)
+	onReconnectAttempt func(chan error)
 
 	onConnectionLoss   func()
 	onReconnectSuccess func()
@@ -134,15 +134,15 @@ func (c *tcpClient) WithInfiniteReconnectAttempts() TCPClient {
 	return c
 }
 
-func (c *tcpClient) WithReconnectCallback(onReconnect func(chan error)) TCPClient {
+func (c *tcpClient) WithReconnectAttemptHook(onReconnectAttempt func(chan error)) TCPClient {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.conn != nil || onReconnect == nil {
+	if c.conn != nil || onReconnectAttempt == nil {
 		return c
 	}
 
-	c.onReconnect = onReconnect
+	c.onReconnectAttempt = onReconnectAttempt
 	return c
 }
 
@@ -564,7 +564,7 @@ func (c *tcpClient) handleIncomingMessages(ctx context.Context) {
 						}
 					}()
 
-					go c.onReconnect(errCh)
+					go c.onReconnectAttempt(errCh)
 				} else {
 					// Fatal error (e.g., decoding error)
 					go c.messageHandling.onMessageError(err)

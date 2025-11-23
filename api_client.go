@@ -39,8 +39,8 @@ import (
 //     lifecycle (for example, sending requests or listening to events).
 //
 // Error handling:
-//   - Fatal server-side or protocol errors are delivered via the channel
-//     returned by MakeFatalErrChan(); when such an error is emitted the
+//   - Fatal server-side or protocol errors are delivered via the
+//     FatalErrorEvent client event; when such an error is emitted the
 //     client will be disconnected and cleaned up. the channel stays open
 //     until a fatal error occurs no matter connect/disconnect state.
 //
@@ -53,12 +53,6 @@ type APIClient interface {
 		Build functions
 	*/
 	/**/
-
-	// MakeFatalErrChan creates a channel that will receive fatal errors from the client.
-	// Errors that are sent to this channel cannot be recovered from, and the client will be
-	// in a disconnected and memory-cleaned state after a fatal error is sent.
-	// MakeFatalErrChan must be called again once a fatal error has occured.
-	MakeFatalErrChan() (chan error, error)
 
 	// WithConfig updates the client configuration. It must be called while
 	// the client is not connected (before `Connect`) and returns the same
@@ -85,7 +79,7 @@ type APIClient interface {
 	// server and return any transport or validation error. When the
 	// server starts sending matching events, they will be dispatched to
 	// the library's internal event clients and any registered
-	// callbacks.
+	// listeners.
 	SubscribeEvent(eventData SubscribableEventData) error
 
 	// UnsubscribeEvent removes a previously created subscription. The
@@ -222,12 +216,12 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		requestHeap:   datatypes.NewRequestHeap(),
 		lifecycleData: datatypes.NewLifecycleData(),
 
-		apiEventHandler: datatypes.NewEventHandler[proto.Message]().
-			WithIgnoreIdsNotIncluded(),
-		clientEventHandler: datatypes.NewEventHandler[ListenableClientEvent]().
-			WithIgnoreIdsNotIncluded(),
+		apiEventHandler:    datatypes.NewEventHandler[proto.Message](),
+		clientEventHandler: datatypes.NewEventHandler[ListenableClientEvent](),
 
 		cred: cred,
+
+		fatalErrCh: make(chan error),
 	}
 
 	h.tcpClient = tcp.NewTCPClient(string(env.GetAddress())).
@@ -235,26 +229,12 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		WithTimeout(time.Millisecond*100).
 		WithReconnectDelay(time.Millisecond*500).
 		WithInfiniteReconnectAttempts().
-		WithReconnectCallback(h.onReconnect).
-		WithConnEventHooks(h.connectionLossCallback, h.reconnectSuccessCallback, h.reconnectFailCallback)
+		WithReconnectAttemptHook(h.onReconnectAttempt).
+		WithConnEventHooks(h.onConnectionLoss, h.onReconnectSuccess, h.onReconnectFail)
 
 	h.WithConfig(DefaultAPIClientConfig())
 
 	return &h, nil
-}
-
-func (h *apiClient) MakeFatalErrChan() (chan error, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if h.lifecycleData.IsClientConnected() {
-		return nil, &LifeCycleAlreadyRunningError{
-			CallContext: "error creating fatal error channel",
-		}
-	}
-
-	h.fatalErrCh = make(chan error, 1)
-	return h.fatalErrCh, nil
 }
 
 func (h *apiClient) WithConfig(config APIClientConfig) APIClient {
@@ -268,173 +248,6 @@ func (h *apiClient) WithConfig(config APIClientConfig) APIClient {
 	h.cfg = &config
 
 	return h
-}
-
-func (h *apiClient) onQueueData() {
-	reqMetaData, _ := h.requestQueue.Dequeue()
-	// Don't check the error of Dequeue since by the time this
-	// callback goroutine is called, all previously enqueued requests might
-	// have been context cancelled. Hence we check if theres non-nil returned reqMetaData
-	if reqMetaData == nil {
-		return
-	}
-
-	reqErrCh := reqMetaData.ErrCh
-
-	// Check if a response is expected
-	expectRes := reqMetaData.ResDataCh != nil
-	if expectRes {
-		// Add the request meta data to the request heap
-		if err := h.requestHeap.AddNode(reqMetaData); err != nil {
-			reqErrCh <- err
-			close(reqErrCh)
-			return
-		}
-	} else {
-		// If no response is expected, close the error channel immediately after dispatching the request
-		defer close(reqErrCh)
-	}
-
-	if err := h.handleSendPayload(reqMetaData); err != nil {
-		// Check if the queue data callback has been called when the tcp client connection has just been closed
-		var noConnErr *NoConnectionError
-		if !errors.As(err, &noConnErr) {
-			if reqErrCh != nil {
-				reqErrCh <- err
-
-				// This check is required to avoid closing a closed channel when no response is expected
-				if expectRes {
-					close(reqErrCh)
-				}
-			}
-		}
-		return
-	}
-}
-
-func (h *apiClient) onTCPMessage(msgBytes []byte) {
-	if h.lifecycleData.IsClientConnected() {
-		// Only lock if life cycle is running already, on Connect the mutex is already locked
-		h.mu.RLock()
-		defer h.mu.RUnlock()
-	}
-
-	var protoMsg messages.ProtoMessage
-	if err := proto.Unmarshal(msgBytes, &protoMsg); err != nil {
-		perr := &ProtoUnmarshalError{
-			CallContext: "proto message",
-			Err:         err,
-		}
-		h.fatalErrCh <- perr
-		return
-	}
-
-	msgPayloadType := messages.ProtoPayloadType(protoMsg.GetPayloadType())
-
-	switch msgPayloadType {
-	case messages.ProtoPayloadType_ERROR_RES:
-		var protoErrorRes messages.ProtoErrorRes
-		if err := proto.Unmarshal(msgBytes, &protoErrorRes); err != nil {
-			perr := &ProtoUnmarshalError{
-				CallContext: "proto error response",
-				Err:         err,
-			}
-			h.fatalErrCh <- perr
-			return
-		}
-
-		genericResErr := &GenericResponseError{
-			ErrorCode:               protoErrorRes.GetErrorCode(),
-			Description:             protoErrorRes.GetDescription(),
-			MaintenanceEndTimestamp: protoErrorRes.GetMaintenanceEndTimestamp(),
-		}
-
-		// Since this response cannot be mapped to any request, make it a fatal error
-		h.fatalErrCh <- genericResErr
-		return
-	case messages.ProtoPayloadType_HEARTBEAT_EVENT:
-		// Ignore heartbeat events
-		return
-	default:
-		msgOAPayloadType := ProtoOAPayloadType(msgPayloadType)
-		if isListenableEvent[msgOAPayloadType] {
-			if err := h.handleListenableEvent(msgOAPayloadType, &protoMsg); err != nil {
-				h.fatalErrCh <- err
-			}
-			return
-		}
-
-		if protoMsg.ClientMsgId == nil {
-			h.fatalErrCh <- errors.New("invalid proto message on response: field ClientMsgId type is nil")
-			return
-		}
-		reqId := datatypes.RequestId(protoMsg.GetClientMsgId())
-
-		// Remove the request meta data from the request heap
-		reqMetaData, err := h.requestHeap.RemoveNode(reqId)
-		if err != nil {
-			var reqHeapErr *RequestHeapNodeNotIncludedError
-			if errors.As(err, &reqHeapErr) {
-				return
-			}
-			h.fatalErrCh <- err
-			return
-		}
-
-		close(reqMetaData.ErrCh)
-
-		reqMetaData.ResDataCh <- &datatypes.ResponseData{
-			ProtoMsg:    &protoMsg,
-			PayloadType: msgOAPayloadType,
-		}
-		return
-	}
-}
-
-func (h *apiClient) onFatalError(err error) {
-	if h.lifecycleData.IsClientConnected() {
-		// Only lock if life cycle is running already, on Connect the mutex is already locked
-		h.mu.Lock()
-		defer h.mu.Unlock()
-	}
-
-	h.disconnect()
-
-	if h.fatalErrCh == nil {
-		panic(err)
-	}
-
-	h.fatalErrCh <- err
-	close(h.fatalErrCh)
-	h.fatalErrCh = nil
-}
-
-func (h *apiClient) onReconnect(errCh chan error) {
-	defer close(errCh)
-
-	if err := h.authenticateApp(); err != nil {
-		errCh <- err
-		return
-	}
-
-	errCh <- nil
-}
-
-func (h *apiClient) connectionLossCallback() {
-	event := &ConnectionLossEvent{}
-	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ConnectionLossEvent), event)
-}
-
-func (h *apiClient) reconnectSuccessCallback() {
-	event := &ReconnectSuccessEvent{}
-	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectSuccessEvent), event)
-}
-
-func (h *apiClient) reconnectFailCallback(err error) {
-	event := &ReconnectFailEvent{
-		Err: err,
-	}
-	h.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectFailEvent), event)
 }
 
 func (h *apiClient) IsConnected() bool {

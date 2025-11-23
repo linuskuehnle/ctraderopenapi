@@ -294,8 +294,9 @@ func (h *apiClient) ListenToEvent(eventType eventType, onEventCh chan Listenable
 	}
 
 	removeCallback := func() error {
+		err := h.apiEventHandler.RemoveEvent(eventId)
 		close(onEventCh)
-		return h.apiEventHandler.RemoveEvent(eventId)
+		return err
 	}
 	go h.runListenerRemove(ctx, removeCallback)
 
@@ -323,8 +324,10 @@ func (h *apiClient) ListenToClientEvent(clientEventType clientEventType, onEvent
 	}
 
 	removeCallback := func() error {
+		err := h.clientEventHandler.RemoveEvent(eventId)
+
 		close(onEventCh)
-		return h.clientEventHandler.RemoveEvent(eventId)
+		return err
 	}
 	go h.runListenerRemove(ctx, removeCallback)
 
@@ -530,7 +533,13 @@ func (h *apiClient) handleListenableEvent(msgType ProtoOAPayloadType, protoMsg *
 		}
 	}
 
-	return h.apiEventHandler.HandleEvent(eventId, event)
+	eventHandled := h.apiEventHandler.HandleEvent(eventId, event)
+	if !eventHandled {
+		return &IdNotIncludedError{
+			Id: eventId,
+		}
+	}
+	return nil
 }
 
 // SpawnEventHandler starts a simple goroutine that reads `ListenableEvent`
