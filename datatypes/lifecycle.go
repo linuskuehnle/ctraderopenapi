@@ -83,6 +83,7 @@ func (d *lifecycleData) Stop() error {
 	d.cancelCtx()
 
 	d.clear()
+	d.init()
 
 	d.isRunning = false
 
