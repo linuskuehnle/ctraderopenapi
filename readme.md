@@ -71,10 +71,6 @@ full comments and examples):
 	- `ListenToClientEvent(clientEventType, chan ListenableClientEvent, ctx)`
 		— listen for client lifecycle events (connection loss, reconnect success
 		and reconnect fail).
-	- `MakeFatalErrChan() (chan error, error)` — create a channel to receive
-		unrecoverable/fatal errors. When a fatal error occurs the client will be
-		disconnected and the channel closed; create it again if you want to
-		observe subsequent fatal errors.
 
 - `ApplicationCredentials{ClientId, ClientSecret}` — credentials used by
 	the application to authenticate to the OpenAPI. Validate with
@@ -167,18 +163,9 @@ if err := client.SubscribeEvent(sub); err != nil {
 }
 ```
 
-3) Listen for client lifecycle events and fatal errors
+3) Listen for client lifecycle events
 
 ```go
-fatalCh, err := client.MakeFatalErrChan()
-if err != nil {
-	panic(err)
-}
-go func() {
-	for err := range fatalCh {
-		fmt.Println("fatal error:", err)
-	}
-}()
 
 clientCh := make(chan ctraderopenapi.ListenableClientEvent)
 if err := client.ListenToClientEvent(ctraderopenapi.ClientEventType_ReconnectSuccessEvent, clientCh, context.Background()); err != nil {
