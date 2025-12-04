@@ -26,16 +26,17 @@ func TestSubscribeUnsubscribeEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiClient(env)
+	c, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	if _, err = autheticateAccount(h, accountId, accessToken); err != nil {
+	if _, err = authenticateAccount(c, accountId, accessToken); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,16 +48,12 @@ func TestSubscribeUnsubscribeEvent(t *testing.T) {
 			SymbolIds:        []int64{symbolId},
 		},
 	}
-	if err = h.SubscribeEvent(subData); err != nil {
+	if err = c.SubscribeEvent(subData); err != nil {
 		t.Fatalf("error subscribing event: %v", err)
 	}
 
-	if err = h.UnsubscribeEvent(subData); err != nil {
+	if err = c.UnsubscribeEvent(subData); err != nil {
 		t.Fatalf("error unsubscribing event: %v", err)
-	}
-
-	if err := h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 }
 
@@ -67,16 +64,17 @@ func TestListenEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiClient(env)
+	c, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	if _, err = autheticateAccount(h, accountId, accessToken); err != nil {
+	if _, err = authenticateAccount(c, accountId, accessToken); err != nil {
 		t.Fatal(err)
 	}
 
@@ -95,9 +93,7 @@ func TestListenEvent(t *testing.T) {
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	// Listen to event. Use the adapter so callers can provide a typed
-	// callback without having to wrap it manually.
-	if err = h.ListenToEvent(EventType_Spots, eventCh, ctx); err != nil {
+	if err = c.ListenToEvent(EventType_Spots, eventCh, ctx); err != nil {
 		t.Fatalf("error registering event listener: %v", err)
 	}
 
@@ -110,7 +106,7 @@ func TestListenEvent(t *testing.T) {
 			SymbolIds:        []int64{symbolId},
 		},
 	}
-	if err = h.SubscribeEvent(subData); err != nil {
+	if err = c.SubscribeEvent(subData); err != nil {
 		t.Fatalf("error subscribing event: %v", err)
 	}
 
@@ -119,12 +115,73 @@ func TestListenEvent(t *testing.T) {
 
 	cancelCtx()
 
-	if err = h.UnsubscribeEvent(subData); err != nil {
+	if err = c.UnsubscribeEvent(subData); err != nil {
 		t.Fatalf("error unsubscribing event: %v", err)
 	}
+}
 
-	if err := h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
+// Subscribe + Reconnect + Listen + cleanup (unsubscribe, deconnect)
+func TestResubscribeOnReconnect(t *testing.T) {
+	accountId, accessToken, env, err := loadTestAccountCredentials()
+	if err != nil {
+		t.Fatalf("error loading test account credentials: %v", err)
+	}
+	c, err := createApiClient(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+	defer c.Disconnect()
+
+	if _, err = authenticateAccount(c, accountId, accessToken); err != nil {
+		t.Fatal(err)
+	}
+
+	wg := sync.WaitGroup{}
+	var once sync.Once
+
+	wg.Add(1)
+	eventCh := make(chan ListenableEvent)
+
+	go func() {
+		<-eventCh
+		once.Do(func() {
+			wg.Done()
+		})
+	}()
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
+	// Simulate connection loss
+	c.tcpClient.JustCloseConn()
+
+	if err = c.ListenToEvent(EventType_Spots, eventCh, ctx); err != nil {
+		t.Fatalf("error registering event listener: %v", err)
+	}
+
+	var symbolId int64 = 315 // "German 40 Index, Spot CFD"
+
+	subData := SubscribableEventData{
+		EventType: EventType_Spots,
+		SubcriptionData: &SubscriptionDataSpotEvent{
+			CtraderAccountId: CtraderAccountId(accountId),
+			SymbolIds:        []int64{symbolId},
+		},
+	}
+	if err = c.SubscribeEvent(subData); err != nil {
+		t.Fatalf("error subscribing event: %v", err)
+	}
+
+	// Wait for immediate event message
+	wg.Wait()
+	cancelCtx()
+
+	// Cleanup
+	if err = c.UnsubscribeEvent(subData); err != nil {
+		t.Fatalf("error unsubscribing event: %v", err)
 	}
 }
 
@@ -135,16 +192,17 @@ func TestListenEventWithSpawnEventHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiClient(env)
+	c, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	if _, err = autheticateAccount(h, accountId, accessToken); err != nil {
+	if _, err = authenticateAccount(c, accountId, accessToken); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,9 +224,7 @@ func TestListenEventWithSpawnEventHandler(t *testing.T) {
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	// Listen to event. Use the adapter so callers can provide a typed
-	// callback without having to wrap it manually.
-	if err = h.ListenToEvent(EventType_Spots, eventCh, ctx); err != nil {
+	if err = c.ListenToEvent(EventType_Spots, eventCh, ctx); err != nil {
 		t.Fatalf("error registering event listener: %v", err)
 	}
 
@@ -181,7 +237,7 @@ func TestListenEventWithSpawnEventHandler(t *testing.T) {
 			SymbolIds:        []int64{symbolId},
 		},
 	}
-	if err = h.SubscribeEvent(subData); err != nil {
+	if err = c.SubscribeEvent(subData); err != nil {
 		t.Fatalf("error subscribing event: %v", err)
 	}
 
@@ -190,12 +246,8 @@ func TestListenEventWithSpawnEventHandler(t *testing.T) {
 
 	cancelCtx()
 
-	if err = h.UnsubscribeEvent(subData); err != nil {
+	if err = c.UnsubscribeEvent(subData); err != nil {
 		t.Fatalf("error unsubscribing event: %v", err)
-	}
-
-	if err := h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 }
 
@@ -206,16 +258,17 @@ func TestLiveTrendbarEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiClient(env)
+	c, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	if _, err = autheticateAccount(h, accountId, accessToken); err != nil {
+	if _, err = authenticateAccount(c, accountId, accessToken); err != nil {
 		t.Fatal(err)
 	}
 
@@ -235,9 +288,7 @@ func TestLiveTrendbarEvent(t *testing.T) {
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	// Listen to event. Use the adapter so callers can provide a typed
-	// callback without having to wrap it manually.
-	if err = h.ListenToEvent(EventType_Spots, eventCh, ctx); err != nil {
+	if err = c.ListenToEvent(EventType_Spots, eventCh, ctx); err != nil {
 		t.Fatalf("error registering spots event listener: %v", err)
 	}
 
@@ -252,7 +303,7 @@ func TestLiveTrendbarEvent(t *testing.T) {
 		},
 	}
 	// Subscribe live trendbars before spots (expected to return an error)
-	err = h.SubscribeEvent(subDataLiveTrendbars)
+	err = c.SubscribeEvent(subDataLiveTrendbars)
 	if err == nil {
 		t.Fatal("error subscribing live trendbars event before spots: expected an error, returned nil")
 	}
@@ -268,12 +319,12 @@ func TestLiveTrendbarEvent(t *testing.T) {
 			SymbolIds:        []int64{symbolId},
 		},
 	}
-	if err = h.SubscribeEvent(subDataSpots); err != nil {
+	if err = c.SubscribeEvent(subDataSpots); err != nil {
 		t.Fatalf("error subscribing spots event: %v", err)
 	}
 
 	// Subscribe live trendbars after spots (expected to not return an error)
-	if err = h.SubscribeEvent(subDataLiveTrendbars); err != nil {
+	if err = c.SubscribeEvent(subDataLiveTrendbars); err != nil {
 		t.Fatalf("error subscribing live trendbars event: %v", err)
 	}
 
@@ -282,36 +333,33 @@ func TestLiveTrendbarEvent(t *testing.T) {
 
 	cancelCtx()
 
-	if err = h.UnsubscribeEvent(subDataSpots); err != nil {
+	if err = c.UnsubscribeEvent(subDataSpots); err != nil {
 		t.Fatalf("error unsubscribing spots event: %v", err)
-	}
-
-	if err := h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 }
 
 // Test client events
 func TestClientEvents(t *testing.T) {
-	h, err := createApiClient(Environment_Demo)
+	c, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	connLossCh := make(chan ListenableClientEvent)
-	if err := h.ListenToClientEvent(ClientEventType_ConnectionLossEvent, connLossCh, nil); err != nil {
+	if err := c.ListenToClientEvent(ClientEventType_ConnectionLossEvent, connLossCh, nil); err != nil {
 		t.Fatalf("error registering connection loss event listener: %v", err)
 	}
 	reconnectSuccessCh := make(chan ListenableClientEvent)
-	if err := h.ListenToClientEvent(ClientEventType_ReconnectSuccessEvent, reconnectSuccessCh, nil); err != nil {
+	if err := c.ListenToClientEvent(ClientEventType_ReconnectSuccessEvent, reconnectSuccessCh, nil); err != nil {
 		t.Fatalf("error registering connection loss event listener: %v", err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	h.tcpClient.JustCloseConn()
+	c.tcpClient.JustCloseConn()
 
 	// Wait for connection loss event
 	<-connLossCh
@@ -330,12 +378,8 @@ func TestClientEvents(t *testing.T) {
 		Res:     &ProtoOAVersionRes{},
 	}
 
-	if err := h.SendRequest(reqData); err != nil {
+	if err := c.SendRequest(reqData); err != nil {
 		t.Fatalf("error getting proxy version: %v", err)
 		return
-	}
-
-	if err = h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 }
