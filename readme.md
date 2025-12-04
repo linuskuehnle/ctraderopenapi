@@ -60,8 +60,9 @@ full comments and examples):
 	— create a new client instance. Call `WithConfig` before `Connect` to
 	adjust runtime buffers/timeouts.
 
-- `APIClient` — main interface. Important methods:
-	- `Connect() error` / `Disconnect() error`
+- `APIClient` — main interface.
+	Important methods:
+	- `Connect() error` / `Disconnect()`
 	- `SendRequest(RequestData) error` — sends a protobuf-typed request and
 		unmarshals the response into the provided response object.
 	- `SubscribeEvent(SubscribableEventData)` / `UnsubscribeEvent(...)` —
@@ -69,10 +70,17 @@ full comments and examples):
 	- `ListenToEvent(eventType, chan ListenableEvent, ctx)` — register a
 		long-running listener channel for push events.
 	- `ListenToClientEvent(clientEventType, chan ListenableClientEvent, ctx)`
-		— listen for client lifecycle events (connection loss, reconnect success
+		— listen for client events (fatal client errors, connection loss, reconnect success
 		and reconnect fail).
+	
+	Fatal (non-recoverable) client errors will be emitted as client event of type
+	FatalErrorEvent. If there is no listener channel installed, that error will be raised
+	as a panic instead.
 
-- `ApplicationCredentials{ClientId, ClientSecret}` — credentials used by
+	The API Client takes care of connection losses. You can listen to reconnect events
+	(ConnectionLossEvent, ReconnectSuccessEvent, ReconnectFailEvent) using ListenToClientEvent.
+
+- `ApplicationCredentials{ ClientId, ClientSecret }` — credentials used by
 	the application to authenticate to the OpenAPI. Validate with
 	`CheckError()`.
 
@@ -89,7 +97,7 @@ full comments and examples):
 - Event adapters & helpers:
 	- `ListenableEvent` and `ListenableClientEvent` are marker interfaces.
 	- `CastToEventType[T]` and `CastToClientEventType[T]` helpers to cast
-		generic events to typed values.
+		the generic event type to the concrete event types.
 	- `SpawnEventHandler` and `SpawnClientEventHandler` start small goroutines
 		that forward typed events to your handler.
 
@@ -113,7 +121,6 @@ func main() {
 		panic(err)
 	}
 
-	client = client.WithConfig(ctraderopenapi.DefaultAPIClientConfig())
 	if err := client.Connect(); err != nil {
 		panic(err)
 	}
@@ -132,7 +139,8 @@ func main() {
 		fmt.Println("request failed:", err)
 		return
 	}
-	fmt.Println("version response:", res)
+
+	fmt.Println("version:", res.GetVersion())
 }
 ```
 
@@ -163,7 +171,7 @@ if err := client.SubscribeEvent(sub); err != nil {
 }
 ```
 
-3) Listen for client lifecycle events
+3) Listen for client events; e.g. ReconnectSuccessEvent:
 
 ```go
 
@@ -175,6 +183,10 @@ ctraderopenapi.SpawnClientEventHandler(context.Background(), clientCh, func(e *c
 	fmt.Println("reconnected")
 })
 ```
+
+I suggest registering all event listener channels before calling apiClient.Connect().
+apiClient.Disconnect() unregisters all event listener channels, hence if you want to
+connect again and use the same listeners you explicitly need to register them again.
 
 ## Running tests
 

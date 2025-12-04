@@ -33,10 +33,9 @@ type TCPClient interface {
 	WithTimeout(timeout time.Duration) TCPClient
 	WithTLS(config *tls.Config) TCPClient
 	WithMessageCallbackChan(onMessageCh chan []byte, onFatalError func(error)) TCPClient
-	WithReconnectDelay(delay time.Duration) TCPClient
+	WithReconnectTimeout(timeout time.Duration) TCPClient
 	WithMaxReconnectAttempts(maxAttempts int) TCPClient
 	WithInfiniteReconnectAttempts() TCPClient
-	WithReconnectAttemptHook(onReconnectAttempt func(chan error)) TCPClient
 	WithConnEventHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient
 
 	GetTimeout() time.Duration
@@ -71,11 +70,10 @@ type tcpClient struct {
 	useTLS    bool
 	tlsConfig *tls.Config
 
-	timeout        time.Duration
-	reconnectDelay time.Duration
-	maxReconnects  int
+	timeout time.Duration
 
-	onReconnectAttempt func(chan error)
+	reconnectTimeout time.Duration
+	maxReconnects    int
 
 	onConnectionLoss   func()
 	onReconnectSuccess func()
@@ -90,15 +88,16 @@ func NewTCPClient(address string) TCPClient {
 
 func newTCPClient(address string) *tcpClient {
 	return &tcpClient{
-		mu:             sync.RWMutex{},
-		address:        address,
-		timeout:        DefaultTimeout,
-		reconnectDelay: DefaultReconnectDelay,
-		maxReconnects:  DefaultMaxReconnects,
+		mu:      sync.RWMutex{},
+		address: address,
+		timeout: DefaultTimeout,
+
+		reconnectTimeout: DefaultReconnectTimeout,
+		maxReconnects:    DefaultMaxReconnects,
 	}
 }
 
-func (c *tcpClient) WithReconnectDelay(delay time.Duration) TCPClient {
+func (c *tcpClient) WithReconnectTimeout(timeout time.Duration) TCPClient {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -106,7 +105,7 @@ func (c *tcpClient) WithReconnectDelay(delay time.Duration) TCPClient {
 		return c
 	}
 
-	c.reconnectDelay = delay
+	c.reconnectTimeout = timeout
 	return c
 }
 
@@ -131,18 +130,6 @@ func (c *tcpClient) WithInfiniteReconnectAttempts() TCPClient {
 	}
 
 	c.maxReconnects = 0
-	return c
-}
-
-func (c *tcpClient) WithReconnectAttemptHook(onReconnectAttempt func(chan error)) TCPClient {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.conn != nil || onReconnectAttempt == nil {
-		return c
-	}
-
-	c.onReconnectAttempt = onReconnectAttempt
 	return c
 }
 
@@ -245,7 +232,7 @@ func (c *tcpClient) OpenConn() error {
 
 	if c.messageHandling != nil {
 		// Start a goroutine to handle incoming messages
-		go c.handleIncomingMessages(c.connCtx)
+		go c.handleInputStream(c.connCtx)
 	}
 
 	return nil
@@ -269,6 +256,13 @@ func (c *tcpClient) establishConn(host string) error {
 	rawConn, err := net.DialTimeout("tcp", c.address, c.timeout)
 	if err != nil {
 		return err
+	}
+
+	if tcpConn, ok := rawConn.(*net.TCPConn); ok {
+		// Enable TCP keepalive to detect dead connections early without overhead.
+		// The OS-level keepalive probes will detect lost connections immediately.
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(time.Second * 3) // Check periodically
 	}
 
 	if !c.useTLS {
@@ -495,7 +489,7 @@ func (c *tcpClient) readPayload() ([]byte, error) {
 	return payloadBytes, nil
 }
 
-func (c *tcpClient) handleIncomingMessage(ctx context.Context) ([]byte, error) {
+func (c *tcpClient) readNextDataBlock(ctx context.Context) ([]byte, error) {
 	// Wait for the message header bytes
 	if hasHeader, err := c.waitForHeader(ctx); err != nil || !hasHeader {
 		return nil, err
@@ -520,7 +514,7 @@ func (c *tcpClient) handleIncomingMessage(ctx context.Context) ([]byte, error) {
 	return payload, nil
 }
 
-func (c *tcpClient) handleIncomingMessages(ctx context.Context) {
+func (c *tcpClient) handleInputStream(ctx context.Context) {
 	defer func() {
 		c.messageHandling.stoppedCh <- struct{}{}
 		close(c.messageHandling.stoppedCh)
@@ -532,43 +526,27 @@ func (c *tcpClient) handleIncomingMessages(ctx context.Context) {
 			// Context canceled — connection is being closed gracefully
 			return
 		default:
-			payload, err := c.handleIncomingMessage(ctx)
+			payload, err := c.readNextDataBlock(ctx)
 			if err != nil {
-				if isNetworkFatal(err) {
-					// Fatal network connection error — connection is lost
-					reconnectCh := make(chan struct{})
-					go c.execReconnectLoop(ctx, reconnectCh)
-
-					// Wait for reconnectCh to complete
-					_, ok := <-reconnectCh
-					if !ok {
-						// Reconnect failed or context has been cancelled. No reconnect message has been sent.
-						return
-					}
-
-					// Call reconnect callback
-					errCh := make(chan error)
-
-					// Handle reconnect result
-					go func() {
-						err := <-errCh
-						if err != nil {
-							// Reconnect failed, call fail hook
-							c.handleReconnectFail(err)
-							return
-						}
-
-						// Reconnect successful, call success hook
-						if c.onReconnectSuccess != nil {
-							c.onReconnectSuccess()
-						}
-					}()
-
-					go c.onReconnectAttempt(errCh)
-				} else {
+				if !isNetworkFatal(err) {
 					// Fatal error (e.g., decoding error)
 					go c.messageHandling.onMessageError(err)
 					return
+				}
+
+				// Fatal network connection error — connection is lost
+				reconnectCh := make(chan struct{})
+				go c.execReconnectLoop(ctx, reconnectCh)
+
+				// Wait for reconnectCh to complete
+				_, ok := <-reconnectCh
+				if !ok {
+					// Reconnect failed or context has been cancelled. No reconnect signal has been emitted.
+					return
+				}
+
+				if c.onReconnectSuccess != nil {
+					c.onReconnectSuccess()
 				}
 			}
 
@@ -587,14 +565,14 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 
 	reconnectAttempt := 0
 	maxAttempts := c.maxReconnects
-	delay := c.reconnectDelay
+	timeout := c.reconnectTimeout
 	c.mu.Unlock()
 
 	if c.onConnectionLoss != nil {
 		c.onConnectionLoss()
 	}
 
-	timer := time.NewTimer(0) // immediate first attempt
+	timer := time.NewTimer(0) // Immediate first attempt
 	defer timer.Stop()
 
 	defer close(reconnectedCh) // Ensure channel is always closed on all exit paths
@@ -628,7 +606,7 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 
 			c.handleReconnectFail(err)
 
-			timer.Reset(delay)
+			timer.Reset(timeout)
 		}
 	}
 }
