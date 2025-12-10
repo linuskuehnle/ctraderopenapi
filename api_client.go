@@ -56,16 +56,25 @@ type APIClient interface {
 
 	// WithConfig updates the client configuration. It must be called while
 	// the client is not connected (before `Connect`) and returns the same
-	// client to allow fluent construction.
+	// client to allow fluent construction. To use the default configuration,
+	// this function must not be called as the api client constructor already
+	// applies the default config.
 	WithConfig(APIClientConfig) APIClient
 
-	// IsConnected returns true if the client is currently connected to the server.
+	// IsConnected does not reflect the actual connection state of the underlying
+	// TCP client, but whether the API client has been connected via `Connect`
+	// and not yet disconnected via `Disconnect`. The actual connection state can be
+	// determined by listening to client events (ConnectionLossEvent,
+	// ReconnectSuccessEvent, ReconnectFailEvent).
 	IsConnected() bool
-	// Connect connects to the cTrader OpenAPI server, authenticates the application and starts the keepalive routine.
+	// Connect connects to the cTrader OpenAPI server, authenticates the application and
+	// starts the keepalive routine.
 	Connect() error
-	// Disconnect logs the user out, stops the keepalive routine and closes the connection. It does not perform
-	// memory cleanup or deallocation, the caller is responsible for disposing of the entire client.
-	Disconnect() error
+	// Disconnect stops the keepalive routine and closes the connection.
+	// Disconnect is a cleanup function. Event listeners are removed and any resources
+	// held by the client are released. After calling Disconnect, the client
+	// must not be used again unless Connect is called again.
+	Disconnect()
 	// SendRequest sends a request to the server and waits for the response.
 	// The response is written to the Res field of the provided RequestData struct.
 	SendRequest(RequestData) error
@@ -92,10 +101,10 @@ type APIClient interface {
 	// ListenToEvent registers a long-running listener for listenable
 	// events (server-initiated push events).
 	// `eventType` selects which event to listen for.
-	// `onEventCh` receives a `ListenableEvent` (concrete types live in
-	// the `messages` package).
+	// `onEventCh` receives a `ListenableEvent`.
 	// `ctx` controls the lifetime of the listener: when `ctx` is canceled the
-	// listener is removed. If `ctx` is nil, a background context is used.
+	// listener is removed. If `ctx` is nil, the listener will not be canceled
+	// until the client is disconnected.
 	//
 	// onEventCh behavior:
 	//  - The provided channel is used by the library to deliver events of the
@@ -130,19 +139,15 @@ type APIClient interface {
 	//   onEventCh := make(chan ListenableEvent)
 	//   if err := h.ListenToEvent(EventType_Spots, onEventCh, ctx); err != nil { /* ... */ }
 	//   if err := SpawnEventHandler(ctx, onEventCh, onSpot); err != nil { /* ... */ }
-	//
-	// Note: the adapter performs a runtime type assertion and will panic if
-	// the handler's type does not match the actual delivered event. This is a
-	// caller error.
 	ListenToEvent(eventType eventType, onEventCh chan ListenableEvent, ctx context.Context) error
 
 	// ListenToClientEvent registers a long-running listener for listenable
 	// api client events (connection loss / reconnect success / reconnect fail).
 	// `eventType` selects which event to listen for.
-	// `onEventCh` receives a `ListenToClientEvent` (concrete types live in the
-	// `messages` package).
+	// `onEventCh` receives a `ListenToClientEvent`.
 	// `ctx` controls the lifetime of the listener: when `ctx` is canceled the
-	// listener is removed. If `ctx` is nil, a background context is used.
+	// listener is removed. If `ctx` is nil, the listener will not be canceled
+	// until the client is disconnected.
 	//
 	// onEventCh behavior:
 	//  - The provided channel is used by the library to deliver events of the
@@ -155,6 +160,7 @@ type APIClient interface {
 	// or the `SpawnClientEventHandler` helper to adapt typed functions.
 	//
 	// Mapping of `clientEventType` → concrete callback argument type:
+	//  - ClientEventType_FatalErrorEvent       -> FatalErrorEvent
 	//  - ClientEventType_ConnectionLossEvent   -> ConnectionLossEvent
 	//  - ClientEventType_ReconnectSuccessEvent -> ReconnectSuccessEvent
 	//  - ClientEventType_ReconnectFailEvent    -> ReconnectFailEvent
@@ -167,10 +173,6 @@ type APIClient interface {
 	//   onEventCh := make(chan ListenableClientEvent)
 	//   if err := h.ListenToClientEvent(ClientEventType_ConnectionLossEvent, onEventCh, ctx); err != nil { /* ... */ }
 	//   if err := SpawnClientEventHandler(ctx, onEventCh, onConnLoss); err != nil { /* ... */ }
-	//
-	// Note: the adapter performs a runtime type assertion and will panic if
-	// the handler's type does not match the actual delivered event. This is a
-	// caller error.
 	ListenToClientEvent(clientEventType clientEventType, onEventCh chan ListenableClientEvent, ctx context.Context) error
 }
 
@@ -191,6 +193,8 @@ type apiClient struct {
 	queueDataCh  chan struct{}
 	tcpMessageCh chan []byte
 
+	activeSubscriptions map[eventType]SubscriptionData
+
 	fatalErrCh chan error
 }
 
@@ -209,7 +213,7 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		return nil, err
 	}
 
-	h := apiClient{
+	c := apiClient{
 		mu: sync.RWMutex{},
 
 		requestQueue:  datatypes.NewRequestQueue(),
@@ -221,70 +225,70 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 
 		cred: cred,
 
+		activeSubscriptions: make(map[eventType]SubscriptionData),
+
 		fatalErrCh: make(chan error),
 	}
 
-	h.tcpClient = tcp.NewTCPClient(string(env.GetAddress())).
+	c.tcpClient = tcp.NewTCPClient(string(env.GetAddress())).
 		WithTLS(tlsConfig).
 		WithTimeout(time.Millisecond*100).
-		WithReconnectDelay(time.Millisecond*500).
+		WithReconnectTimeout(time.Second*3).
 		WithInfiniteReconnectAttempts().
-		WithReconnectAttemptHook(h.onReconnectAttempt).
-		WithConnEventHooks(h.onConnectionLoss, h.onReconnectSuccess, h.onReconnectFail)
+		WithConnEventHooks(c.onConnectionLoss, c.onReconnectSuccess, c.onReconnectFail)
 
-	h.WithConfig(DefaultAPIClientConfig())
+	c.WithConfig(DefaultAPIClientConfig())
 
-	return &h, nil
+	return &c, nil
 }
 
-func (h *apiClient) WithConfig(config APIClientConfig) APIClient {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (c *apiClient) WithConfig(config APIClientConfig) APIClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if h.lifecycleData.IsClientConnected() {
-		return h
+	if c.lifecycleData.IsClientConnected() {
+		return c
 	}
 
-	h.cfg = &config
+	c.cfg = &config
 
-	return h
+	return c
 }
 
-func (h *apiClient) IsConnected() bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+func (c *apiClient) IsConnected() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-	isConn := h.isConnected()
+	isConn := c.isConnected()
 	return isConn
 }
 
-func (h *apiClient) isConnected() bool {
-	return h.tcpClient.HasConn()
+func (c *apiClient) isConnected() bool {
+	return c.tcpClient.HasConn()
 }
 
-func (h *apiClient) Connect() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (c *apiClient) Connect() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	return h.connect()
+	return c.connect()
 }
 
-func (h *apiClient) Disconnect() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	return h.disconnect()
+func (c *apiClient) Disconnect() {
+	c.mu.Lock()
+	c.disconnect()
+	c.mu.Unlock()
 }
 
-func (h *apiClient) SendRequest(reqData RequestData) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+func (c *apiClient) SendRequest(reqData RequestData) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-	return h.sendRequest(reqData)
+	return c.sendRequest(reqData)
 }
 
-func (h *apiClient) sendRequest(reqData RequestData) error {
-	if !h.isConnected() {
+func (c *apiClient) sendRequest(reqData RequestData) error {
+	if !c.isConnected() {
 		return &APIClientNotConnectedError{
 			CallContext: "SendRequest",
 		}
@@ -318,7 +322,7 @@ func (h *apiClient) sendRequest(reqData RequestData) error {
 		return err
 	}
 
-	if err := h.enqueueRequest(metaData); err != nil {
+	if err := c.enqueueRequest(metaData); err != nil {
 		return err
 	}
 
@@ -350,89 +354,91 @@ func (h *apiClient) sendRequest(reqData RequestData) error {
 	return nil
 }
 
-func (h *apiClient) connect() error {
+func (c *apiClient) connect() error {
 	// Config specific setup
-	h.queueDataCh = make(chan struct{}, h.cfg.QueueBufferSize)
-	h.tcpMessageCh = make(chan []byte, h.cfg.TCPMessageBufferSize)
-	h.requestHeap.SetIterationInterval(h.cfg.RequestHeapIterationTimeout)
+	c.queueDataCh = make(chan struct{}, c.cfg.QueueBufferSize)
+	c.tcpMessageCh = make(chan []byte, c.cfg.TCPMessageBufferSize)
+	c.requestHeap.SetIterationInterval(c.cfg.RequestHeapIterationTimeout)
 
-	h.requestQueue.WithDataCallbackChan(h.queueDataCh)
-	h.tcpClient.WithMessageCallbackChan(h.tcpMessageCh, h.onFatalError)
+	c.requestQueue.WithDataCallbackChan(c.queueDataCh)
+	c.tcpClient.WithMessageCallbackChan(c.tcpMessageCh, c.onFatalError)
 
-	if err := h.lifecycleData.Start(); err != nil {
+	if err := c.lifecycleData.Start(); err != nil {
 		return err
 	}
 
-	ctx, err := h.lifecycleData.GetContext()
+	ctx, err := c.lifecycleData.GetContext()
 	if err != nil {
 		return err
 	}
-	onMessageSend, err := h.lifecycleData.GetOnMessageSendCh()
+	onMessageSend, err := c.lifecycleData.GetOnMessageSendCh()
 	if err != nil {
 		return err
 	}
 
 	// Execute heartbeat in separate goroutine
-	go h.runHeartbeat(ctx, onMessageSend)
+	go c.runHeartbeat(ctx, onMessageSend)
 
 	// Start persistent goroutine that listens to queueDataCh and calls onQueueData
-	go h.runQueueDataHandler(ctx, h.queueDataCh)
+	go c.runQueueDataHandler(ctx, c.queueDataCh)
 
 	// Start persistent goroutine that listens to tcpMessageCh and calls onTCPMessage
-	go h.runTCPMessageHandler(ctx, h.tcpMessageCh)
+	go c.runTCPMessageHandler(ctx, c.tcpMessageCh)
 
 	// Start persistent goroutine that listens to fatalErrCh and calls onFatalError
-	go h.runFatalErrorHandler(ctx, h.fatalErrCh)
+	go c.runFatalErrorHandler(ctx, c.fatalErrCh)
 
 	// Start the request heap goroutine here
-	if err := h.requestHeap.Start(); err != nil {
+	if err := c.requestHeap.Start(); err != nil {
 		return err
 	}
 
-	if err := h.tcpClient.OpenConn(); err != nil {
+	if err := c.tcpClient.OpenConn(); err != nil {
 		return err
 	}
 
-	if err := h.authenticateApp(); err != nil {
+	if err := c.authenticateApp(); err != nil {
 		return err
 	}
 
-	h.lifecycleData.SetClientConnected(true)
+	c.lifecycleData.SetClientConnected(true)
 
 	return nil
 }
 
-func (h *apiClient) disconnect() error {
-	h.requestQueue.Clear()
-	h.apiEventHandler.Clear()
+func (c *apiClient) disconnect() {
+	c.requestQueue.Clear()
 
-	h.lifecycleData.Stop()
+	c.lifecycleData.Stop()
 
-	h.requestHeap.Stop()
+	c.requestHeap.Stop()
 
-	if err := h.tcpClient.CloseConn(); err != nil {
-		return err
-	}
+	c.tcpClient.CloseConn()
 
-	return nil
+	c.apiEventHandler.Clear()
+	c.clientEventHandler.Clear()
+	c.activeSubscriptions = make(map[eventType]SubscriptionData)
 }
 
-func (h *apiClient) authenticateApp() error {
+func (c *apiClient) authenticateApp() error {
+	ctx, cancelCtx := context.WithTimeout(context.Background(), appAuthenticationRequestTimeout)
+	defer cancelCtx()
+
 	reqData := RequestData{
-		Ctx:     context.Background(),
+		Ctx:     ctx,
 		ReqType: PROTO_OA_APPLICATION_AUTH_REQ,
 		Req: &messages.ProtoOAApplicationAuthReq{
-			ClientId:     proto.String(h.cred.ClientId),
-			ClientSecret: proto.String(h.cred.ClientSecret),
+			ClientId:     proto.String(c.cred.ClientId),
+			ClientSecret: proto.String(c.cred.ClientSecret),
 		},
 		ResType: PROTO_OA_APPLICATION_AUTH_RES,
 		Res:     &messages.ProtoOAApplicationAuthRes{},
 	}
 
-	return h.sendRequest(reqData)
+	return c.sendRequest(reqData)
 }
 
-func (h *apiClient) emitHeartbeat() error {
+func (c *apiClient) emitHeartbeat() error {
 	errCh := make(chan error)
 
 	reqData := RequestData{
@@ -446,7 +452,7 @@ func (h *apiClient) emitHeartbeat() error {
 		return err
 	}
 
-	if err := h.enqueueRequest(metaData); err != nil {
+	if err := c.enqueueRequest(metaData); err != nil {
 		return err
 	}
 
@@ -456,8 +462,8 @@ func (h *apiClient) emitHeartbeat() error {
 	return nil
 }
 
-func (h *apiClient) handleEnqueue(calleeRef string, reqMetaData *datatypes.RequestMetaData) error {
-	if !h.tcpClient.HasConn() {
+func (c *apiClient) handleEnqueue(calleeRef string, reqMetaData *datatypes.RequestMetaData) error {
+	if !c.tcpClient.HasConn() {
 		return &EnqueueOnClosedConnError{}
 	}
 
@@ -471,15 +477,15 @@ func (h *apiClient) handleEnqueue(calleeRef string, reqMetaData *datatypes.Reque
 	return nil
 }
 
-func (h *apiClient) enqueueRequest(reqMetaData *datatypes.RequestMetaData) error {
-	if err := h.handleEnqueue("enqueueRequest", reqMetaData); err != nil {
+func (c *apiClient) enqueueRequest(reqMetaData *datatypes.RequestMetaData) error {
+	if err := c.handleEnqueue("enqueueRequest", reqMetaData); err != nil {
 		return err
 	}
 
-	return h.requestQueue.Enqueue(reqMetaData)
+	return c.requestQueue.Enqueue(reqMetaData)
 }
 
-func (h *apiClient) handleSendPayload(reqMetaData *datatypes.RequestMetaData) error {
+func (c *apiClient) handleSendPayload(reqMetaData *datatypes.RequestMetaData) error {
 	// Before sending the request first check if the request context has already expired
 	if err := reqMetaData.Ctx.Err(); err != nil {
 		return &RequestContextExpiredError{
@@ -487,10 +493,10 @@ func (h *apiClient) handleSendPayload(reqMetaData *datatypes.RequestMetaData) er
 		}
 	}
 
-	return h.sendPayload(reqMetaData.Id, reqMetaData.Req, reqMetaData.ReqType)
+	return c.sendPayload(reqMetaData.Id, reqMetaData.Req, reqMetaData.ReqType)
 }
 
-func (h *apiClient) sendPayload(reqId datatypes.RequestId, msg proto.Message, payloadType ProtoOAPayloadType) error {
+func (c *apiClient) sendPayload(reqId datatypes.RequestId, msg proto.Message, payloadType ProtoOAPayloadType) error {
 	msgBytes, err := proto.Marshal(msg)
 	if err != nil {
 		return &ProtoMarshalError{
@@ -515,12 +521,12 @@ func (h *apiClient) sendPayload(reqId datatypes.RequestId, msg proto.Message, pa
 	}
 
 	// Signal the keepalive that a message is being sent
-	h.lifecycleData.SignalMessageSend()
+	c.lifecycleData.SignalMessageSend()
 
-	return h.tcpClient.Send(reqBytes)
+	return c.tcpClient.Send(reqBytes)
 }
 
-func (h *apiClient) runHeartbeat(ctx context.Context, onMessageSend chan struct{}) {
+func (c *apiClient) runHeartbeat(ctx context.Context, onMessageSend chan struct{}) {
 	timer := time.NewTimer(time.Second * Heartbeat_Timeout_Seconds)
 	defer timer.Stop()
 
@@ -539,8 +545,25 @@ func (h *apiClient) runHeartbeat(ctx context.Context, onMessageSend chan struct{
 			timer.Reset(time.Second * Heartbeat_Timeout_Seconds)
 		case <-timer.C:
 			// Heartbeat timeout reached, send heartbeat
-			if err = h.emitHeartbeat(); err != nil {
-				h.fatalErrCh <- err
+			if err = c.emitHeartbeat(); err != nil {
+				/*
+					Ignore EnqueueOnClosedConnError and NoConnectionError
+				*/
+				// Check if EnqueueOnClosedConnError occured right when the tcp client connection
+				// has just been closed and before the lifecycle data has been updated to reflect
+				// the disconnected state.
+				var enqueueErr *EnqueueOnClosedConnError
+				// Check if the queue data callback for heartbeat emit has been called
+				// right when the tcp client connection has just been closed and before
+				// the lifecycle data has been updated to reflect the disconnected state.
+				var noConnErr *NoConnectionError
+
+				if errors.As(err, &enqueueErr) || errors.As(err, &noConnErr) {
+					timer.Reset(time.Second * Heartbeat_Timeout_Seconds)
+					continue
+				}
+
+				c.fatalErrCh <- err
 				return
 			}
 
@@ -549,7 +572,7 @@ func (h *apiClient) runHeartbeat(ctx context.Context, onMessageSend chan struct{
 	}
 }
 
-func (h *apiClient) runQueueDataHandler(lifecycleCtx context.Context, queueDataCh <-chan struct{}) {
+func (c *apiClient) runQueueDataHandler(lifecycleCtx context.Context, queueDataCh <-chan struct{}) {
 	for {
 		select {
 		case <-lifecycleCtx.Done():
@@ -558,12 +581,12 @@ func (h *apiClient) runQueueDataHandler(lifecycleCtx context.Context, queueDataC
 			if !ok {
 				return
 			}
-			h.onQueueData()
+			c.onQueueData()
 		}
 	}
 }
 
-func (h *apiClient) runTCPMessageHandler(lifecycleCtx context.Context, tcpMessageCh <-chan []byte) {
+func (c *apiClient) runTCPMessageHandler(lifecycleCtx context.Context, tcpMessageCh <-chan []byte) {
 	for {
 		select {
 		case <-lifecycleCtx.Done():
@@ -572,12 +595,12 @@ func (h *apiClient) runTCPMessageHandler(lifecycleCtx context.Context, tcpMessag
 			if !ok {
 				return
 			}
-			h.onTCPMessage(msg)
+			c.onTCPMessage(msg)
 		}
 	}
 }
 
-func (h *apiClient) runFatalErrorHandler(lifecycleCtx context.Context, fatalErrCh <-chan error) {
+func (c *apiClient) runFatalErrorHandler(lifecycleCtx context.Context, fatalErrCh <-chan error) {
 	for {
 		select {
 		case <-lifecycleCtx.Done():
@@ -586,7 +609,7 @@ func (h *apiClient) runFatalErrorHandler(lifecycleCtx context.Context, fatalErrC
 			if !ok {
 				return
 			}
-			h.onFatalError(err)
+			c.onFatalError(err)
 		}
 	}
 }

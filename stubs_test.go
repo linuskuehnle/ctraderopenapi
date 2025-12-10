@@ -80,7 +80,7 @@ func createApiClient(env Environment) (*apiClient, error) {
 	return h, nil
 }
 
-func autheticateAccount(h *apiClient, ctid int64, accessToken string) (*ProtoOAAccountAuthRes, error) {
+func authenticateAccount(c *apiClient, ctid int64, accessToken string) (*ProtoOAAccountAuthRes, error) {
 	req := ProtoOAAccountAuthReq{
 		CtidTraderAccountId: proto.Int64(ctid),
 		AccessToken:         proto.String(accessToken),
@@ -97,7 +97,7 @@ func autheticateAccount(h *apiClient, ctid int64, accessToken string) (*ProtoOAA
 		Res:     &res,
 	}
 
-	if err := h.SendRequest(reqData); err != nil {
+	if err := c.SendRequest(reqData); err != nil {
 		return nil, fmt.Errorf("error sending account auth request: %v", err)
 	}
 	return &res, nil

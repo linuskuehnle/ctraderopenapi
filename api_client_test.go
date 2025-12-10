@@ -25,46 +25,40 @@ import (
 )
 
 func TestClientConnectDisconnect(t *testing.T) {
-	h, err := createApiClient(Environment_Demo)
+	c, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
-
-	if err = h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
-	}
+	c.Disconnect()
 }
 
 func TestClientConnectHeartbeatDisconnect(t *testing.T) {
-	h, err := createApiClient(Environment_Demo)
+	c, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	if err := h.emitHeartbeat(); err != nil {
+	if err := c.emitHeartbeat(); err != nil {
 		t.Fatalf("error emitting heartbeat: %v", err)
-	}
-
-	if err = h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 }
 
 func TestClientReqConcurrency(t *testing.T) {
-	h, err := createApiClient(Environment_Demo)
+	c, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
 
@@ -94,7 +88,7 @@ func TestClientReqConcurrency(t *testing.T) {
 				Res:     &res,
 			}
 
-			if err := h.SendRequest(reqData); err != nil {
+			if err := c.SendRequest(reqData); err != nil {
 				reqErrs[i] = err
 				return
 			}
@@ -104,9 +98,7 @@ func TestClientReqConcurrency(t *testing.T) {
 	// Wait for all requests to finish
 	wg.Wait()
 
-	if err = h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
-	}
+	c.Disconnect()
 
 	// Check for request errors
 	for _, e := range reqErrs {
@@ -122,14 +114,15 @@ func TestProtoOAErrorResponse(t *testing.T) {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
 
-	h, err := createApiClient(env)
+	c, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
 	// Make unauthenticated request that will return a proto error response
 	req := ProtoOAGetTrendbarsReq{
@@ -149,7 +142,7 @@ func TestProtoOAErrorResponse(t *testing.T) {
 		Res:     &res,
 	}
 
-	if err = h.SendRequest(reqData); err != nil {
+	if err = c.SendRequest(reqData); err != nil {
 		var respErr *ResponseError
 		if !errors.As(err, &respErr) {
 			t.Fatalf("unexpected error of type RequestError. got: %v", err)
@@ -157,14 +150,10 @@ func TestProtoOAErrorResponse(t *testing.T) {
 	} else {
 		t.Fatal("expected RequestError error return value")
 	}
-
-	if err := h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
-	}
 }
 
 func TestListenToFatalError(t *testing.T) {
-	h, err := createApiClient(Environment_Demo)
+	c, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,19 +171,20 @@ func TestListenToFatalError(t *testing.T) {
 			cancel()
 		})
 	}
-	if err := h.ListenToClientEvent(ClientEventType_FatalErrorEvent, onFatalErrCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ClientEventType_FatalErrorEvent, onFatalErrCh, ctx); err != nil {
 		t.Fatalf("error listening to fatal error client event: %v", err)
 	}
 	if err := SpawnClientEventHandler(ctx, onFatalErrCh, onFatalErr); err != nil {
 		t.Fatalf("error spawning client event handler: %v", err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
 	// Manually trigger a fatal error
-	h.fatalErrCh <- errors.New("test fatal error")
+	c.fatalErrCh <- errors.New("test fatal error")
 
 	select {
 	case <-ctx.Done():
@@ -204,21 +194,18 @@ func TestListenToFatalError(t *testing.T) {
 }
 
 func TestHeartbeatEmission(t *testing.T) {
-	h, err := createApiClient(Environment_Demo)
+	c, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
 	// Test if any panics occur after emitting the heartbeat event
 	time.Sleep(time.Second * (Heartbeat_Timeout_Seconds + 2))
-
-	if err = h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
-	}
 }
 
 func TestAccountAuth(t *testing.T) {
@@ -227,22 +214,19 @@ func TestAccountAuth(t *testing.T) {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
 
-	h, err := createApiClient(env)
+	c, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	res, err := autheticateAccount(h, accountId, accessToken)
+	res, err := authenticateAccount(c, accountId, accessToken)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	if err := h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 
 	if res.GetCtidTraderAccountId() != accountId {
@@ -255,16 +239,17 @@ func TestGetSymbols(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error loading test account credentials: %v", err)
 	}
-	h, err := createApiClient(env)
+	c, err := createApiClient(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	if _, err = autheticateAccount(h, accountId, accessToken); err != nil {
+	if _, err = authenticateAccount(c, accountId, accessToken); err != nil {
 		t.Fatal(err)
 	}
 
@@ -278,17 +263,13 @@ func TestGetSymbols(t *testing.T) {
 		Res:     &ProtoOASymbolsListRes{},
 	}
 
-	if err = h.SendRequest(reqData); err != nil {
+	if err = c.SendRequest(reqData); err != nil {
 		t.Fatalf("error sending request: %v", err)
-	}
-
-	if err := h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 }
 
 func TestReconnect(t *testing.T) {
-	h, err := createApiClient(Environment_Demo)
+	c, err := createApiClient(Environment_Demo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,13 +303,13 @@ func TestReconnect(t *testing.T) {
 		t.Logf("reconnect failed: %v", e.Err)
 	}
 
-	if err := h.ListenToClientEvent(ClientEventType_ConnectionLossEvent, onConnLossCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ClientEventType_ConnectionLossEvent, onConnLossCh, ctx); err != nil {
 		t.Fatalf("error listening to connection loss events: %v", err)
 	}
-	if err := h.ListenToClientEvent(ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh, ctx); err != nil {
 		t.Fatalf("error listening to reconnect success events: %v", err)
 	}
-	if err := h.ListenToClientEvent(ClientEventType_ReconnectFailEvent, onReconnectFailCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ClientEventType_ReconnectFailEvent, onReconnectFailCh, ctx); err != nil {
 		t.Fatalf("error listening to reconnect failure events: %v", err)
 	}
 
@@ -342,11 +323,12 @@ func TestReconnect(t *testing.T) {
 		t.Fatalf("error spawning reconnect failure event handler: %v", err)
 	}
 
-	if err = h.Connect(); err != nil {
+	if err = c.Connect(); err != nil {
 		t.Fatalf("error connecting: %v", err)
 	}
+	defer c.Disconnect()
 
-	h.tcpClient.JustCloseConn()
+	c.tcpClient.JustCloseConn()
 
 	// Wait for reconnect to complete
 	wg.Wait()
@@ -363,12 +345,8 @@ func TestReconnect(t *testing.T) {
 		Res:     &ProtoOAVersionRes{},
 	}
 
-	if err := h.SendRequest(reqData); err != nil {
+	if err := c.SendRequest(reqData); err != nil {
 		t.Fatalf("error getting proxy version: %v", err)
 		return
-	}
-
-	if err = h.Disconnect(); err != nil {
-		t.Fatalf("error disconnecting: %v", err)
 	}
 }

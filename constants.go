@@ -15,6 +15,8 @@
 package ctraderopenapi
 
 import (
+	"time"
+
 	"github.com/linuskuehnle/ctraderopenapi/datatypes"
 )
 
@@ -22,6 +24,8 @@ const (
 	DefaultQueueBufferSize             = 10
 	DefaultTCPMessageBufferSize        = 10
 	DefaultRequestHeapIterationTimeout = datatypes.DefaultRequestHeapIterationTimeout
+
+	appAuthenticationRequestTimeout = time.Second * 1
 )
 
 const (

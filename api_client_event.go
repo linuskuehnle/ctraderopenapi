@@ -30,7 +30,7 @@ Pass through functions
 */
 /**/
 
-func (h *apiClient) SubscribeEvent(eventData SubscribableEventData) error {
+func (c *apiClient) SubscribeEvent(eventData SubscribableEventData) error {
 	if eventData.SubcriptionData == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "SubscribeToEvent",
@@ -106,10 +106,19 @@ func (h *apiClient) SubscribeEvent(eventData SubscribableEventData) error {
 		}
 	}
 
-	return h.SendRequest(reqData)
+	if err := c.SendRequest(reqData); err != nil {
+		return err
+	}
+
+	// Add SubscribableEventData to active subscriptions map on apiClient
+	c.mu.Lock()
+	c.activeSubscriptions[eventData.EventType] = eventData.SubcriptionData
+	c.mu.Unlock()
+
+	return nil
 }
 
-func (h *apiClient) UnsubscribeEvent(eventData SubscribableEventData) error {
+func (c *apiClient) UnsubscribeEvent(eventData SubscribableEventData) error {
 	if eventData.SubcriptionData == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "SubscribeToEvent",
@@ -185,10 +194,19 @@ func (h *apiClient) UnsubscribeEvent(eventData SubscribableEventData) error {
 		}
 	}
 
-	return h.SendRequest(reqData)
+	if err := c.SendRequest(reqData); err != nil {
+		return err
+	}
+
+	// Remove SubscribableEventData from active subscriptions map on apiClient
+	c.mu.Lock()
+	delete(c.activeSubscriptions, eventData.EventType)
+	c.mu.Unlock()
+
+	return nil
 }
 
-func (h *apiClient) ListenToEvent(eventType eventType, onEventCh chan ListenableEvent, ctx context.Context) error {
+func (c *apiClient) ListenToEvent(eventType eventType, onEventCh chan ListenableEvent, ctx context.Context) error {
 	if onEventCh == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "ListenToEvent",
@@ -289,21 +307,21 @@ func (h *apiClient) ListenToEvent(eventType eventType, onEventCh chan Listenable
 		}
 	}
 
-	if err := h.apiEventHandler.AddEvent(eventId, eventCallback); err != nil {
+	if err := c.apiEventHandler.AddEvent(eventId, eventCallback); err != nil {
 		return err
 	}
 
 	removeCallback := func() error {
-		err := h.apiEventHandler.RemoveEvent(eventId)
+		err := c.apiEventHandler.RemoveEvent(eventId)
 		close(onEventCh)
 		return err
 	}
-	go h.runListenerRemove(ctx, removeCallback)
+	go c.runListenerRemove(ctx, removeCallback)
 
 	return nil
 }
 
-func (h *apiClient) ListenToClientEvent(clientEventType clientEventType, onEventCh chan ListenableClientEvent, ctx context.Context) error {
+func (c *apiClient) ListenToClientEvent(clientEventType clientEventType, onEventCh chan ListenableClientEvent, ctx context.Context) error {
 	if onEventCh == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "ListenToClientEvent",
@@ -319,17 +337,17 @@ func (h *apiClient) ListenToClientEvent(clientEventType clientEventType, onEvent
 		onEventCh <- event
 	}
 
-	if err := h.clientEventHandler.AddEvent(eventId, eventCallback); err != nil {
+	if err := c.clientEventHandler.AddEvent(eventId, eventCallback); err != nil {
 		return err
 	}
 
 	removeCallback := func() error {
-		err := h.clientEventHandler.RemoveEvent(eventId)
+		err := c.clientEventHandler.RemoveEvent(eventId)
 
 		close(onEventCh)
 		return err
 	}
-	go h.runListenerRemove(ctx, removeCallback)
+	go c.runListenerRemove(ctx, removeCallback)
 
 	return nil
 }
@@ -340,8 +358,8 @@ Event specific listen functions
 /**/
 
 // runListenerRemove runs a goroutine that waits until either the listener context or the life cycle context is done
-func (h *apiClient) runListenerRemove(listenerCtx context.Context, removeCallback func() error) {
-	lifecycleCtx, _ := h.lifecycleData.GetContext()
+func (c *apiClient) runListenerRemove(listenerCtx context.Context, removeCallback func() error) {
+	lifecycleCtx, _ := c.lifecycleData.GetContext()
 
 	// Wait until either the listener context or the life cycle context is done
 	// This ensures that if the api client is disconnected and all events are removed
@@ -358,9 +376,9 @@ func (h *apiClient) runListenerRemove(listenerCtx context.Context, removeCallbac
 }
 
 // handleListenableEvent is called on an incoming event message that is listenable
-func (h *apiClient) handleListenableEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
+func (c *apiClient) handleListenableEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
 	var eventId datatypes.EventId = datatypes.EventId(msgType)
-	if !h.apiEventHandler.HasEvent(eventId) {
+	if !c.apiEventHandler.HasEvent(eventId) {
 		// No listener for this event, ignore
 		return nil
 	}
@@ -533,7 +551,7 @@ func (h *apiClient) handleListenableEvent(msgType ProtoOAPayloadType, protoMsg *
 		}
 	}
 
-	eventHandled := h.apiEventHandler.HandleEvent(eventId, event)
+	eventHandled := c.apiEventHandler.HandleEvent(eventId, event)
 	if !eventHandled {
 		return &IdNotIncludedError{
 			Id: eventId,
