@@ -150,8 +150,9 @@ func (e *ProtoMarshalError) Error() string {
 /**/
 
 /*
-./datatypes
+	/datatypes
 */
+
 // FunctionInvalidArgError is an alias for `datatypes.FunctionInvalidArgError`.
 // It is returned by library functions when a caller provides an argument
 // that fails validation (for example a nil pointer where a struct is
@@ -160,13 +161,13 @@ func (e *ProtoMarshalError) Error() string {
 // underlying validation error.
 type FunctionInvalidArgError = datatypes.FunctionInvalidArgError
 
-// RequestContextExpiredError is an alias for `datatypes.RequestContextExpiredError`.
-// It is used by the request queue/mapper to indicate that a request's
-// provided `context.Context` has been cancelled or has timed out before
-// the request could be sent or responded to. The wrapped `Err` field
-// contains the original context error (for example `context.Canceled`).
-type RequestContextExpiredError = datatypes.RequestContextExpiredError
+/*
+	/datatypes/account_manager.go
+*/
 
+/*
+	/datatypes/event_handler.go
+*/
 // IdAlreadyIncludedError is an alias for `datatypes.IdAlreadyIncludedError`.
 // The event handler returns this error when attempting to register a
 // callback for an event id that is already registered.
@@ -178,6 +179,9 @@ type IdAlreadyIncludedError = datatypes.IdAlreadyIncludedError
 // `WithIgnoreIdsNotIncluded`, in which case dispatch skips silently).
 type IdNotIncludedError = datatypes.IdNotIncludedError
 
+/*
+	/datatypes/lifecycle.go
+*/
 // LifeCycleAlreadyRunningError indicates an attempt to start the internal
 // lifecycle (heartbeat, channel handlers) while it is already running.
 type LifeCycleAlreadyRunningError = datatypes.LifeCycleAlreadyRunningError
@@ -185,6 +189,16 @@ type LifeCycleAlreadyRunningError = datatypes.LifeCycleAlreadyRunningError
 // LifeCycleNotRunningError indicates an operation that requires the
 // lifecycle to be running was called while it was stopped.
 type LifeCycleNotRunningError = datatypes.LifeCycleNotRunningError
+
+/*
+	/datatypes/request_heap.go
+*/
+// RequestContextExpiredError is an alias for `datatypes.RequestContextExpiredError`.
+// It is used by the request queue/mapper to indicate that a request's
+// provided `context.Context` has been cancelled or has timed out before
+// the request could be sent or responded to. The wrapped `Err` field
+// contains the original context error (for example `context.Canceled`).
+type RequestContextExpiredError = datatypes.RequestContextExpiredError
 
 // RequestHeapAlreadyRunningError indicates an attempt to start the
 // request heap goroutine when it is already active.
@@ -199,7 +213,7 @@ type RequestHeapNotRunningError = datatypes.RequestHeapNotRunningError
 type RequestHeapNodeNotIncludedError = datatypes.RequestHeapNodeNotIncludedError
 
 /*
-./tcp
+	/tcp/client.go
 */
 // OpenConnectionError is an alias for `tcp.OpenConnectionError` and is
 // returned when the underlying TCP client fails to open a connection
@@ -216,11 +230,6 @@ type CloseConnectionError = tcp.CloseConnectionError
 // `Read` when the client is disconnected).
 type NoConnectionError = tcp.NoConnectionError
 
-// InvalidAddressError is an alias for `tcp.InvalidAddressError` and is
-// returned when the configured TCP address is invalid or cannot be
-// parsed.
-type InvalidAddressError = tcp.InvalidAddressError
-
 // OperationBlockedError is an alias for `tcp.OperationBlockedError`.
 // It signals that an operation cannot be performed because another
 // mutually-exclusive mode is active (for example calling `Read` when a
@@ -231,3 +240,11 @@ type OperationBlockedError = tcp.OperationBlockedError
 // It is returned when the TCP client has reached the maximum number of configured reconnect
 // attempts without successfully reconnecting.
 type MaxReconnectAttemptsReachedError = tcp.MaxReconnectAttemptsReachedError
+
+/*
+	/tcp/helpers.go
+*/
+// InvalidAddressError is an alias for `tcp.InvalidAddressError` and is
+// returned when the configured TCP address is invalid or cannot be
+// parsed.
+type InvalidAddressError = tcp.InvalidAddressError

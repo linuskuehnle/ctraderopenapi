@@ -21,19 +21,69 @@ import (
 )
 
 const (
-	DefaultQueueBufferSize             = 10
-	DefaultTCPMessageBufferSize        = 10
-	DefaultRequestHeapIterationTimeout = datatypes.DefaultRequestHeapIterationTimeout
+	ConfigDefault_QueueBufferSize             = 10
+	ConfigDefault_TCPMessageBufferSize        = 10
+	ConfigDefault_RequestHeapIterationTimeout = datatypes.DefaultRequestHeapIterationTimeout
 
-	appAuthenticationRequestTimeout = time.Second * 1
+	appAuthReqTimeout        = time.Second * 1
+	fatalErrReconnectTimeout = time.Second * 3
 )
 
 const (
-	// Demo environment is used for cTrader Demo accounts
-	Environment_Demo Environment = iota
-	// Live environment is used for cTrader Live accounts
-	Environment_Live Environment = iota
+	rateLimitN_Live       = 50
+	rateLimitN_Historical = 5
+
+	rateLimitInterval   = time.Second
+	rateLimitHitTimeout = time.Millisecond * 5
 )
+
+const (
+	rateLimitType_Live rateLimitType = iota
+	rateLimitType_Historical
+)
+
+var rateLimitTypeByReqType = map[ProtoOAPayloadType]rateLimitType{
+	PROTO_OA_APPLICATION_AUTH_REQ:             rateLimitType_Live,
+	PROTO_OA_ACCOUNT_AUTH_REQ:                 rateLimitType_Live,
+	PROTO_OA_VERSION_REQ:                      rateLimitType_Live,
+	PROTO_OA_NEW_ORDER_REQ:                    rateLimitType_Live,
+	PROTO_OA_CANCEL_ORDER_REQ:                 rateLimitType_Live,
+	PROTO_OA_AMEND_ORDER_REQ:                  rateLimitType_Live,
+	PROTO_OA_AMEND_POSITION_SLTP_REQ:          rateLimitType_Live,
+	PROTO_OA_CLOSE_POSITION_REQ:               rateLimitType_Live,
+	PROTO_OA_ASSET_LIST_REQ:                   rateLimitType_Live,
+	PROTO_OA_SYMBOLS_LIST_REQ:                 rateLimitType_Live,
+	PROTO_OA_SYMBOL_BY_ID_REQ:                 rateLimitType_Live,
+	PROTO_OA_SYMBOLS_FOR_CONVERSION_REQ:       rateLimitType_Live,
+	PROTO_OA_TRADER_REQ:                       rateLimitType_Live,
+	PROTO_OA_RECONCILE_REQ:                    rateLimitType_Live,
+	PROTO_OA_SUBSCRIBE_SPOTS_REQ:              rateLimitType_Live,
+	PROTO_OA_UNSUBSCRIBE_SPOTS_REQ:            rateLimitType_Live,
+	PROTO_OA_DEAL_LIST_REQ:                    rateLimitType_Historical,
+	PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ:      rateLimitType_Live,
+	PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ:    rateLimitType_Live,
+	PROTO_OA_GET_TRENDBARS_REQ:                rateLimitType_Historical,
+	PROTO_OA_EXPECTED_MARGIN_REQ:              rateLimitType_Live,
+	PROTO_OA_CASH_FLOW_HISTORY_LIST_REQ:       rateLimitType_Historical,
+	PROTO_OA_GET_TICKDATA_REQ:                 rateLimitType_Historical,
+	PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ: rateLimitType_Live,
+	PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_REQ:    rateLimitType_Live,
+	PROTO_OA_ASSET_CLASS_LIST_REQ:             rateLimitType_Live,
+	PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_REQ:       rateLimitType_Live,
+	PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ:     rateLimitType_Live,
+	PROTO_OA_SYMBOL_CATEGORY_REQ:              rateLimitType_Live,
+	PROTO_OA_ACCOUNT_LOGOUT_REQ:               rateLimitType_Live,
+	PROTO_OA_MARGIN_CALL_LIST_REQ:             rateLimitType_Live,
+	PROTO_OA_MARGIN_CALL_UPDATE_REQ:           rateLimitType_Live,
+	PROTO_OA_REFRESH_TOKEN_REQ:                rateLimitType_Live,
+	PROTO_OA_ORDER_LIST_REQ:                   rateLimitType_Live,
+	PROTO_OA_GET_DYNAMIC_LEVERAGE_REQ:         rateLimitType_Live,
+	PROTO_OA_DEAL_LIST_BY_POSITION_ID_REQ:     rateLimitType_Live,
+	PROTO_OA_ORDER_DETAILS_REQ:                rateLimitType_Live,
+	PROTO_OA_ORDER_LIST_BY_POSITION_ID_REQ:    rateLimitType_Live,
+	PROTO_OA_DEAL_OFFSET_LIST_REQ:             rateLimitType_Live,
+	PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ:  rateLimitType_Live,
+}
 
 const (
 	// EndpointAddress represents the cTrader OpenAPI server address.
@@ -45,8 +95,21 @@ const (
 )
 
 const (
+	// Demo environment is used for cTrader Demo accounts
+	Environment_Demo Environment = iota
+	// Live environment is used for cTrader Live accounts
+	Environment_Live Environment = iota
+)
+
+const (
 	// Heartbeat_Interval_Seconds is the interval at which heartbeat messages are sent to the server.
 	Heartbeat_Timeout_Seconds = 9
+)
+
+const (
+	resErrorCode_appAlreadyAuthenticated   = "ALREADY_LOGGED_IN"
+	resErrorCode_apiEventAlreadySubscribed = "ALREADY_SUBSCRIBED"
+	resErrorCode_serverSideRateLimitHit    = "REQUEST_FREQUENCY_EXCEEDED"
 )
 
 // Mapped responses to requests
@@ -111,22 +174,22 @@ var isListenableEvent = map[ProtoOAPayloadType]bool{
 
 const (
 	// Subscribable events
-	EventType_Spots eventType = iota
-	EventType_LiveTrendbars
-	EventType_DepthQuotes
+	APIEventType_Spots apiEventType = iota
+	APIEventType_LiveTrendbars
+	APIEventType_DepthQuotes
 
 	// Listenable events
-	EventType_TrailingSLChanged
-	EventType_SymbolChanged
-	EventType_TraderUpdated
-	EventType_Execution
-	EventType_OrderError
-	EventType_MarginChanged
-	EventType_AccountsTokenInvalidated
-	EventType_ClientDisconnect
-	EventType_AccountDisconnect
-	EventType_MarginCallUpdate
-	EventType_MarginCallTrigger
+	APIEventType_TrailingSLChanged
+	APIEventType_SymbolChanged
+	APIEventType_TraderUpdated
+	APIEventType_Execution
+	APIEventType_OrderError
+	APIEventType_MarginChanged
+	APIEventType_AccountsTokenInvalidated
+	APIEventType_ClientDisconnect
+	APIEventType_AccountDisconnect
+	APIEventType_MarginCallUpdate
+	APIEventType_MarginCallTrigger
 )
 
 const (

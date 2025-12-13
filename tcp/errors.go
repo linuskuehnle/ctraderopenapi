@@ -18,6 +18,10 @@ import (
 	"fmt"
 )
 
+/*
+	client.go
+*/
+
 type OpenConnectionError struct {
 	ErrorText string
 }
@@ -42,15 +46,6 @@ func (e *NoConnectionError) Error() string {
 	return fmt.Sprintf("%s: no open connection available", e.CallContext)
 }
 
-type InvalidAddressError struct {
-	Address   string
-	ErrorText string
-}
-
-func (e *InvalidAddressError) Error() string {
-	return fmt.Sprintf("invalid address '%s': %s", e.Address, e.ErrorText)
-}
-
 type OperationBlockedError struct {
 	CallContext string
 	ErrorText   string
@@ -66,4 +61,17 @@ type MaxReconnectAttemptsReachedError struct {
 
 func (e *MaxReconnectAttemptsReachedError) Error() string {
 	return fmt.Sprintf("maximum reconnect attempts (%d) reached", e.MaxAttempts)
+}
+
+/*
+	helpers.go
+*/
+
+type InvalidAddressError struct {
+	Address   string
+	ErrorText string
+}
+
+func (e *InvalidAddressError) Error() string {
+	return fmt.Sprintf("invalid address '%s': %s", e.Address, e.ErrorText)
 }

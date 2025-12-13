@@ -21,7 +21,6 @@ import (
 
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -46,27 +45,34 @@ import (
 //
 // Usage summary:
 //   - Create the client with NewApiClient, call Connect, then use
-//     SendRequest, SubscribeEvent/UnsubscribeEvent, or ListenToEvent as
+//     SendRequest, SubscribeAPIEvent/UnsubscribeAPIEvent, or ListenToAPIEvent as
 //     required. Call Disconnect when finished.
 type APIClient interface {
-	/*
-		Build functions
-	*/
-	/**/
+	// WithQueueBufferSize updates the number of queued requests that may be buffered
+	// by the internal request queue before backpressure applies.
+	// It must be called while the client is not connected (before `Connect`) and returns
+	// the same client to allow fluent construction.
+	WithQueueBufferSize(int) APIClient
 
-	// WithConfig updates the client configuration. It must be called while
-	// the client is not connected (before `Connect`) and returns the same
-	// client to allow fluent construction. To use the default configuration,
-	// this function must not be called as the api client constructor already
-	// applies the default config.
-	WithConfig(APIClientConfig) APIClient
+	// TCPMessageBufferSize updates the size of the channel used to receive inbound
+	// TCP messages from the network reader.
+	// It must be called while the client is not connected (before `Connect`) and returns
+	// the same client to allow fluent construction.
+	WithTCPMessageBufferSize(int) APIClient
 
-	// IsConnected does not reflect the actual connection state of the underlying
-	// TCP client, but whether the API client has been connected via `Connect`
-	// and not yet disconnected via `Disconnect`. The actual connection state can be
-	// determined by listening to client events (ConnectionLossEvent,
-	// ReconnectSuccessEvent, ReconnectFailEvent).
-	IsConnected() bool
+	// WithRequestHeapIterationTimeout updates interval used by the request heap to
+	// periodically check for expired request contexts.
+	// It must be called while the client is not connected (before `Connect`) and returns
+	// the same client to allow fluent construction.
+	WithRequestHeapIterationTimeout(time.Duration) APIClient
+
+	// DisableDefaultRateLimiter disables the internal request rate limiter. Only do this
+	// when you either use your own rate limiter or if you do not expect to ever reach the
+	// request rate limit.
+	// It must be called while the client is not connected (before `Connect`) and returns
+	// the same client to allow fluent construction.
+	DisableDefaultRateLimiter() APIClient
+
 	// Connect connects to the cTrader OpenAPI server, authenticates the application and
 	// starts the keepalive routine.
 	Connect() error
@@ -75,11 +81,29 @@ type APIClient interface {
 	// held by the client are released. After calling Disconnect, the client
 	// must not be used again unless Connect is called again.
 	Disconnect()
+
+	/*
+		api_client_request.go
+	*/
+
+	// TODO: document
+	AuthenticateAccount(ctid CtraderAccountId, accessToken AccessToken) (*ProtoOAAccountAuthRes, error)
+
+	// TODO: document
+	LogoutAccount(ctid CtraderAccountId) (*ProtoOAAccountLogoutRes, error)
+
+	// TODO: document
+	RefreshAccessToken(expiredToken AccessToken, refreshToken RefreshToken) (*ProtoOARefreshTokenRes, error)
+
 	// SendRequest sends a request to the server and waits for the response.
 	// The response is written to the Res field of the provided RequestData struct.
 	SendRequest(RequestData) error
 
-	// SubscribeEvent subscribes the currently authenticated client for
+	/*
+		api_client_event.go
+	*/
+
+	// SubscribeAPIEvent subscribes the currently authenticated client for
 	// the provided subscription-based event. The `eventData` argument
 	// chooses the event type and provides the subscription parameters
 	// (for example, account id and symbol ids for spot quotes).
@@ -87,18 +111,16 @@ type APIClient interface {
 	// The call will send the corresponding subscribe request to the
 	// server and return any transport or validation error. When the
 	// server starts sending matching events, they will be dispatched to
-	// the library's internal event clients and any registered
-	// listeners.
-	SubscribeEvent(eventData SubscribableEventData) error
+	// the library's internal event clients and any registered listeners.
+	SubscribeAPIEvent(eventData SubscribableAPIEventData) error
 
-	// UnsubscribeEvent removes a previously created subscription. The
+	// UnsubscribeAPIEvent removes a previously created subscription. The
 	// `eventData` must match the original subscription parameters used
 	// to subscribe. This call sends the corresponding unsubscribe
-	// request to the server and returns any transport or validation
-	// error.
-	UnsubscribeEvent(eventData SubscribableEventData) error
+	// request to the server and returns any transport or validation error.
+	UnsubscribeAPIEvent(eventData SubscribableAPIEventData) error
 
-	// ListenToEvent registers a long-running listener for listenable
+	// ListenToAPIEvent registers a long-running listener for listenable
 	// events (server-initiated push events).
 	// `eventType` selects which event to listen for.
 	// `onEventCh` receives a `ListenableEvent`.
@@ -114,32 +136,32 @@ type APIClient interface {
 	//    not attempt to write to the channel.
 	//
 	// Note: callbacks that need typed event values can use `CastToEventType`
-	// or the `SpawnEventHandler` helper to adapt typed functions.
+	// or the `SpawnAPIEventHandler` helper to adapt typed functions.
 	//
 	// Mapping of `eventType` → concrete callback argument type:
-	//  - EventType_Spots                     -> ProtoOASpotEvent
-	//  - EventType_DepthQuotes               -> ProtoOADepthEvent
-	//  - EventType_TrailingSLChanged        -> ProtoOATrailingSLChangedEvent
-	//  - EventType_SymbolChanged            -> ProtoOASymbolChangedEvent
-	//  - EventType_TraderUpdated            -> ProtoOATraderUpdatedEvent
-	//  - EventType_Execution                -> ProtoOAExecutionEvent
-	//  - EventType_OrderError               -> ProtoOAOrderErrorEvent
-	//  - EventType_MarginChanged            -> ProtoOAMarginChangedEvent
-	//  - EventType_AccountsTokenInvalidated -> ProtoOAAccountsTokenInvalidatedEvent
-	//  - EventType_ClientDisconnect         -> ProtoOAClientDisconnectEvent
-	//  - EventType_AccountDisconnect        -> ProtoOAAccountDisconnectEvent
-	//  - EventType_MarginCallUpdate         -> ProtoOAMarginCallUpdateEvent
-	//  - EventType_MarginCallTrigger        -> ProtoOAMarginCallTriggerEvent
+	//  - APIEventType_Spots                    -> ProtoOASpotEvent
+	//  - APIEventType_DepthQuotes              -> ProtoOADepthEvent
+	//  - APIEventType_TrailingSLChanged        -> ProtoOATrailingSLChangedEvent
+	//  - APIEventType_SymbolChanged            -> ProtoOASymbolChangedEvent
+	//  - APIEventType_TraderUpdated            -> ProtoOATraderUpdatedEvent
+	//  - APIEventType_Execution                -> ProtoOAExecutionEvent
+	//  - APIEventType_OrderError               -> ProtoOAOrderErrorEvent
+	//  - APIEventType_MarginChanged            -> ProtoOAMarginChangedEvent
+	//  - APIEventType_AccountsTokenInvalidated -> ProtoOAAccountsTokenInvalidatedEvent
+	//  - APIEventType_ClientDisconnect         -> ProtoOAClientDisconnectEvent
+	//  - APIEventType_AccountDisconnect        -> ProtoOAAccountDisconnectEvent
+	//  - APIEventType_MarginCallUpdate         -> ProtoOAMarginCallUpdateEvent
+	//  - APIEventType_MarginCallTrigger        -> ProtoOAMarginCallTriggerEvent
 	//
 	// To register a typed callback without writing a manual wrapper, use
-	// `SpawnEventHandler` which starts a small goroutine that adapts the
+	// `SpawnAPIEventHandler` which starts a small goroutine that adapts the
 	// generic `ListenableEvent` channel to a typed client. Example:
 	//
 	//   onSpot := func(e *ProtoOASpotEvent) { fmt.Println(e) }
 	//   onEventCh := make(chan ListenableEvent)
-	//   if err := h.ListenToEvent(EventType_Spots, onEventCh, ctx); err != nil { /* ... */ }
-	//   if err := SpawnEventHandler(ctx, onEventCh, onSpot); err != nil { /* ... */ }
-	ListenToEvent(eventType eventType, onEventCh chan ListenableEvent, ctx context.Context) error
+	//   if err := h.ListenToAPIEvent(ctx, EventType_Spots, onEventCh); err != nil { /* ... */ }
+	//   if err := SpawnAPIEventHandler(ctx, onEventCh, onSpot); err != nil { /* ... */ }
+	ListenToAPIEvent(ctx context.Context, eventType eventType, onEventCh chan ListenableEvent) error
 
 	// ListenToClientEvent registers a long-running listener for listenable
 	// api client events (connection loss / reconnect success / reconnect fail).
@@ -171,19 +193,22 @@ type APIClient interface {
 	//
 	//   onConnLoss := func(e *ConnectionLossEvent) { fmt.Println(e) }
 	//   onEventCh := make(chan ListenableClientEvent)
-	//   if err := h.ListenToClientEvent(ClientEventType_ConnectionLossEvent, onEventCh, ctx); err != nil { /* ... */ }
+	//   if err := h.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, onEventCh); err != nil { /* ... */ }
 	//   if err := SpawnClientEventHandler(ctx, onEventCh, onConnLoss); err != nil { /* ... */ }
-	ListenToClientEvent(clientEventType clientEventType, onEventCh chan ListenableClientEvent, ctx context.Context) error
+	ListenToClientEvent(ctx context.Context, clientEventType clientEventType, onEventCh chan ListenableClientEvent) error
 }
 
 type apiClient struct {
-	mu  sync.RWMutex
-	cfg *APIClientConfig
+	mu sync.RWMutex
 
+	cfg apiClientConfig
+
+	tcpClient     tcp.TCPClient
+	lifecycleData datatypes.LifecycleData
 	requestQueue  datatypes.RequestQueue
 	requestHeap   datatypes.RequestHeap
-	lifecycleData datatypes.LifecycleData
-	tcpClient     tcp.TCPClient
+	rateLimiters  map[rateLimitType]datatypes.RateLimiter
+	accManager    datatypes.AccountManager[eventType, SubscriptionData]
 
 	apiEventHandler    datatypes.EventHandler[proto.Message]
 	clientEventHandler datatypes.EventHandler[ListenableClientEvent]
@@ -193,7 +218,7 @@ type apiClient struct {
 	queueDataCh  chan struct{}
 	tcpMessageCh chan []byte
 
-	activeSubscriptions map[eventType]SubscriptionData
+	connMu sync.Mutex
 
 	fatalErrCh chan error
 }
@@ -216,16 +241,20 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 	c := apiClient{
 		mu: sync.RWMutex{},
 
+		cfg: defaultAPIClientConfig(),
+
+		lifecycleData: datatypes.NewLifecycleData(),
 		requestQueue:  datatypes.NewRequestQueue(),
 		requestHeap:   datatypes.NewRequestHeap(),
-		lifecycleData: datatypes.NewLifecycleData(),
+		rateLimiters:  make(map[rateLimitType]datatypes.RateLimiter),
+		accManager:    datatypes.NewAccountManager[eventType, SubscriptionData](),
 
 		apiEventHandler:    datatypes.NewEventHandler[proto.Message](),
 		clientEventHandler: datatypes.NewEventHandler[ListenableClientEvent](),
 
 		cred: cred,
 
-		activeSubscriptions: make(map[eventType]SubscriptionData),
+		connMu: sync.Mutex{},
 
 		fatalErrCh: make(chan error),
 	}
@@ -237,34 +266,62 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		WithInfiniteReconnectAttempts().
 		WithConnEventHooks(c.onConnectionLoss, c.onReconnectSuccess, c.onReconnectFail)
 
-	c.WithConfig(DefaultAPIClientConfig())
+	c.rateLimiters[rateLimitType_Live], _ = datatypes.NewRateLimiter(rateLimitN_Live-1, rateLimitInterval, rateLimitHitTimeout)
+	c.rateLimiters[rateLimitType_Historical], _ = datatypes.NewRateLimiter(rateLimitN_Historical-1, rateLimitInterval, rateLimitHitTimeout)
 
 	return &c, nil
 }
 
-func (c *apiClient) WithConfig(config APIClientConfig) APIClient {
+func (c *apiClient) WithQueueBufferSize(queueBufferSize int) APIClient {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.lifecycleData.IsClientConnected() {
+	if c.lifecycleData.IsClientInitialized() {
 		return c
 	}
 
-	c.cfg = &config
+	c.cfg.queueBufferSize = queueBufferSize
 
 	return c
 }
 
-func (c *apiClient) IsConnected() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (c *apiClient) WithTCPMessageBufferSize(tcpMessageBufferSize int) APIClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	isConn := c.isConnected()
-	return isConn
+	if c.lifecycleData.IsClientInitialized() {
+		return c
+	}
+
+	c.cfg.tcpMessageBufferSize = tcpMessageBufferSize
+
+	return c
 }
 
-func (c *apiClient) isConnected() bool {
-	return c.tcpClient.HasConn()
+func (c *apiClient) WithRequestHeapIterationTimeout(requestHeapIterationTimeout time.Duration) APIClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.lifecycleData.IsClientInitialized() {
+		return c
+	}
+
+	c.cfg.requestHeapIterationTimeout = requestHeapIterationTimeout
+
+	return c
+}
+
+func (c *apiClient) DisableDefaultRateLimiter() APIClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.lifecycleData.IsClientInitialized() {
+		return c
+	}
+
+	c.rateLimiters = nil
+
+	return c
 }
 
 func (c *apiClient) Connect() error {
@@ -276,89 +333,22 @@ func (c *apiClient) Connect() error {
 
 func (c *apiClient) Disconnect() {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.disconnect()
-	c.mu.Unlock()
-}
-
-func (c *apiClient) SendRequest(reqData RequestData) error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.sendRequest(reqData)
-}
-
-func (c *apiClient) sendRequest(reqData RequestData) error {
-	if !c.isConnected() {
-		return &APIClientNotConnectedError{
-			CallContext: "SendRequest",
-		}
-	}
-
-	if reqData.Ctx == nil {
-		reqData.Ctx = context.Background()
-	}
-
-	expectedResType, exists := resTypeByReqType[reqData.ReqType]
-	if !exists {
-		return &FunctionInvalidArgError{
-			FunctionName: "SendRequest",
-			Err:          fmt.Errorf("provided unknown request type %d", reqData.ReqType),
-		}
-	}
-	if expectedResType != reqData.ResType {
-		return &FunctionInvalidArgError{
-			FunctionName: "SendRequest",
-			Err: fmt.Errorf("expected response type %d, got %d for request type %d",
-				expectedResType, reqData.ResType, reqData.ReqType,
-			),
-		}
-	}
-
-	errCh := make(chan error)
-	resDataCh := make(chan *datatypes.ResponseData)
-
-	metaData, err := datatypes.NewRequestMetaData(&reqData, errCh, resDataCh)
-	if err != nil {
-		return err
-	}
-
-	if err := c.enqueueRequest(metaData); err != nil {
-		return err
-	}
-
-	if err, ok := <-errCh; ok {
-		return err
-	}
-
-	resData := <-resDataCh
-
-	payload := resData.ProtoMsg.GetPayload()
-	if err := checkResponseForError(payload, resData.PayloadType); err != nil {
-		return err
-	}
-
-	if resData.PayloadType != reqData.ResType {
-		return fmt.Errorf("unexpected response payload type: got %d, expected %d",
-			resData.PayloadType, reqData.ResType,
-		)
-	}
-
-	// Unmarshal payload into provided response struct
-	if err := proto.Unmarshal(payload, reqData.Res); err != nil {
-		return &ProtoUnmarshalError{
-			CallContext: fmt.Sprintf("proto response [%d]", reqData.ResType),
-			Err:         err,
-		}
-	}
-
-	return nil
 }
 
 func (c *apiClient) connect() error {
+	if c.lifecycleData.IsRunning() {
+		return &datatypes.LifeCycleAlreadyRunningError{
+			CallContext: "api client connect",
+		}
+	}
+
 	// Config specific setup
-	c.queueDataCh = make(chan struct{}, c.cfg.QueueBufferSize)
-	c.tcpMessageCh = make(chan []byte, c.cfg.TCPMessageBufferSize)
-	c.requestHeap.SetIterationInterval(c.cfg.RequestHeapIterationTimeout)
+	c.queueDataCh = make(chan struct{}, c.cfg.queueBufferSize)
+	c.tcpMessageCh = make(chan []byte, c.cfg.tcpMessageBufferSize)
+	c.requestHeap.SetIterationInterval(c.cfg.requestHeapIterationTimeout)
 
 	c.requestQueue.WithDataCallbackChan(c.queueDataCh)
 	c.tcpClient.WithMessageCallbackChan(c.tcpMessageCh, c.onFatalError)
@@ -401,7 +391,8 @@ func (c *apiClient) connect() error {
 		return err
 	}
 
-	c.lifecycleData.SetClientConnected(true)
+	c.lifecycleData.SetClientInitialized(true)
+	c.lifecycleData.SetClientConnected()
 
 	return nil
 }
@@ -409,6 +400,8 @@ func (c *apiClient) connect() error {
 func (c *apiClient) disconnect() {
 	c.requestQueue.Clear()
 
+	// Takes care of client connect state, hence explicitly calling
+	// c.lifecycleData.SetClientDisconnected() is not necessary
 	c.lifecycleData.Stop()
 
 	c.requestHeap.Stop()
@@ -417,69 +410,18 @@ func (c *apiClient) disconnect() {
 
 	c.apiEventHandler.Clear()
 	c.clientEventHandler.Clear()
-	c.activeSubscriptions = make(map[eventType]SubscriptionData)
 }
 
-func (c *apiClient) authenticateApp() error {
-	ctx, cancelCtx := context.WithTimeout(context.Background(), appAuthenticationRequestTimeout)
-	defer cancelCtx()
-
-	reqData := RequestData{
-		Ctx:     ctx,
-		ReqType: PROTO_OA_APPLICATION_AUTH_REQ,
-		Req: &messages.ProtoOAApplicationAuthReq{
-			ClientId:     proto.String(c.cred.ClientId),
-			ClientSecret: proto.String(c.cred.ClientSecret),
-		},
-		ResType: PROTO_OA_APPLICATION_AUTH_RES,
-		Res:     &messages.ProtoOAApplicationAuthRes{},
-	}
-
-	return c.sendRequest(reqData)
-}
-
-func (c *apiClient) emitHeartbeat() error {
-	errCh := make(chan error)
-
-	reqData := RequestData{
-		Ctx:     context.Background(),
-		ReqType: ProtoOAPayloadType(messages.ProtoPayloadType_HEARTBEAT_EVENT),
-		Req:     &messages.ProtoHeartbeatEvent{},
-	}
-
-	metaData, err := datatypes.NewRequestMetaData(&reqData, errCh, nil)
-	if err != nil {
-		return err
-	}
-
-	if err := c.enqueueRequest(metaData); err != nil {
-		return err
-	}
-
-	if err, ok := <-errCh; ok {
-		return err
-	}
-	return nil
-}
-
-func (c *apiClient) handleEnqueue(calleeRef string, reqMetaData *datatypes.RequestMetaData) error {
+func (c *apiClient) enqueueRequest(reqMetaData *datatypes.RequestMetaData) error {
 	if !c.tcpClient.HasConn() {
 		return &EnqueueOnClosedConnError{}
 	}
 
 	if reqMetaData.ErrCh == nil {
 		return &FunctionInvalidArgError{
-			FunctionName: calleeRef,
+			FunctionName: "enqueueRequest",
 			Err:          errors.New("field ErrCh of request meta data cannot be nil"),
 		}
-	}
-
-	return nil
-}
-
-func (c *apiClient) enqueueRequest(reqMetaData *datatypes.RequestMetaData) error {
-	if err := c.handleEnqueue("enqueueRequest", reqMetaData); err != nil {
-		return err
 	}
 
 	return c.requestQueue.Enqueue(reqMetaData)
@@ -611,26 +553,5 @@ func (c *apiClient) runFatalErrorHandler(lifecycleCtx context.Context, fatalErrC
 			}
 			c.onFatalError(err)
 		}
-	}
-}
-
-func checkResponseForError(payloadBytes []byte, payloadType ProtoOAPayloadType) error {
-	if payloadType != PROTO_OA_ERROR_RES {
-		return nil
-	}
-
-	var errorMsg messages.ProtoOAErrorRes
-	if err := proto.Unmarshal(payloadBytes, &errorMsg); err != nil {
-		return &ProtoUnmarshalError{
-			CallContext: "proto OA error response",
-			Err:         err,
-		}
-	}
-
-	return &ResponseError{
-		ErrorCode:               errorMsg.GetErrorCode(),
-		Description:             errorMsg.GetDescription(),
-		MaintenanceEndTimestamp: errorMsg.GetMaintenanceEndTimestamp(),
-		RetryAfter:              errorMsg.GetRetryAfter(),
 	}
 }

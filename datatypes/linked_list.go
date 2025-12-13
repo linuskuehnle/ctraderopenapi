@@ -33,14 +33,19 @@ func (n *node[T]) isTail() bool {
 }
 
 type LinkedList[T comparable] interface {
+	WithAllowDuplicates() LinkedList[T]
+
 	Clear()
 	Has(t T) bool
 	IsEmpty() bool
 	Length() int
 	Append(t T) error
 	Prepend(t T) error
-	Pop() (T, error)
+	PopHead() (T, error)
+	PopTail() (T, error)
 	Remove(t T) error
+	PeekHead() (T, error)
+	PeekTail() (T, error)
 }
 
 // No mutex locks here as its used only in request queue
@@ -49,6 +54,8 @@ type linkedList[T comparable] struct {
 	head   *node[T]
 	tail   *node[T]
 	length int
+
+	allowDuplicates bool
 }
 
 func NewLinkedList[T comparable]() LinkedList[T] {
@@ -59,10 +66,21 @@ func newLinkedList[T comparable]() *linkedList[T] {
 	return &linkedList[T]{}
 }
 
+func (l *linkedList[T]) WithAllowDuplicates() LinkedList[T] {
+	if !l.IsEmpty() {
+		return l
+	}
+
+	l.allowDuplicates = true
+	return l
+}
+
 func (l *linkedList[T]) Clear() {
 	l.length = 0
 	l.head = nil
 	l.tail = nil
+
+	l.allowDuplicates = false
 }
 
 func (l *linkedList[T]) Has(t T) bool {
@@ -89,7 +107,7 @@ func (l *linkedList[T]) find(t T) *node[T] {
 }
 
 func (l *linkedList[T]) Append(t T) error {
-	if l.Has(t) {
+	if !l.allowDuplicates && l.Has(t) {
 		return fmt.Errorf("duplicate: cannot append: %v", t)
 	}
 
@@ -113,7 +131,7 @@ func (l *linkedList[T]) Append(t T) error {
 }
 
 func (l *linkedList[T]) Prepend(t T) error {
-	if l.Has(t) {
+	if !l.allowDuplicates && l.Has(t) {
 		return fmt.Errorf("duplicate: cannot prepend: %v", t)
 	}
 
@@ -136,15 +154,28 @@ func (l *linkedList[T]) Prepend(t T) error {
 	return nil
 }
 
-func (l *linkedList[T]) Pop() (T, error) {
+func (l *linkedList[T]) PopHead() (T, error) {
 	if l.length == 0 {
 		var zero T
-		return zero, fmt.Errorf("cannot pop from empty list")
+		return zero, fmt.Errorf("cannot pop head from empty list")
 	}
 
 	t := *l.head.value
 
 	l.popHead()
+
+	return t, nil
+}
+
+func (l *linkedList[T]) PopTail() (T, error) {
+	if l.length == 0 {
+		var zero T
+		return zero, fmt.Errorf("cannot pop tail from empty list")
+	}
+
+	t := *l.tail.value
+
+	l.popTail()
 
 	return t, nil
 }
@@ -184,6 +215,10 @@ func (l *linkedList[T]) popTail() {
 }
 
 func (l *linkedList[T]) Remove(t T) error {
+	if l.allowDuplicates {
+		return fmt.Errorf("remove: operation not usable when allowing duplicates")
+	}
+
 	n := l.find(t)
 	if n == nil {
 		return fmt.Errorf("remove: not in list: %v", t)
@@ -208,4 +243,24 @@ func (l *linkedList[T]) Remove(t T) error {
 	n.prev = nil
 
 	return nil
+}
+
+func (l *linkedList[T]) PeekHead() (T, error) {
+	if l.length == 0 {
+		var zero T
+		return zero, fmt.Errorf("cannot peek head on empty list")
+	}
+
+	t := *l.head.value
+	return t, nil
+}
+
+func (l *linkedList[T]) PeekTail() (T, error) {
+	if l.length == 0 {
+		var zero T
+		return zero, fmt.Errorf("cannot peek tail on empty list")
+	}
+
+	t := *l.tail.value
+	return t, nil
 }

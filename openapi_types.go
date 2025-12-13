@@ -397,9 +397,6 @@ func GetTrendbarPeriods() []ProtoOATrendbarPeriod {
 */
 /**/
 
-// * Request for authorizing of the trading account session. Requires established authorized connection with the client application using ProtoOAApplicationAuthReq.
-type ProtoOAAccountAuthReq = messages.ProtoOAAccountAuthReq
-
 // * Response to the ProtoOAApplicationAuthRes request.
 type ProtoOAAccountAuthRes = messages.ProtoOAAccountAuthRes
 
@@ -498,9 +495,6 @@ type ProtoOAGetAccountListByAccessTokenReq = messages.ProtoOAGetAccountListByAcc
 // * Response to the ProtoOAGetAccountListByAccessTokenReq request.
 type ProtoOAGetAccountListByAccessTokenRes = messages.ProtoOAGetAccountListByAccessTokenRes
 
-// * Request to refresh the access token using refresh token of granted trader's account.
-type ProtoOARefreshTokenReq = messages.ProtoOARefreshTokenReq
-
 // * Response to the ProtoOARefreshTokenReq request.
 type ProtoOARefreshTokenRes = messages.ProtoOARefreshTokenRes
 
@@ -532,9 +526,6 @@ type ProtoOASymbolCategoryListReq = messages.ProtoOASymbolCategoryListReq
 
 // * Response to the ProtoSymbolCategoryListReq request.
 type ProtoOASymbolCategoryListRes = messages.ProtoOASymbolCategoryListRes
-
-// * Request for logout of trading account session.
-type ProtoOAAccountLogoutReq = messages.ProtoOAAccountLogoutReq
 
 // * Response to the ProtoOATraderLogoutReq request. Actual logout of trading account will be completed on ProtoOAAccountDisconnectEvent.
 type ProtoOAAccountLogoutRes = messages.ProtoOAAccountLogoutRes

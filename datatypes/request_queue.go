@@ -100,7 +100,7 @@ func (q *requestQueue) dequeueNoLock() (*RequestMetaData, error) {
 	if q.list.IsEmpty() {
 		return nil, fmt.Errorf("error dequeueing: queue is empty")
 	}
-	id, _ := q.list.Pop()
+	id, _ := q.list.PopHead()
 
 	reqData := q.reqMap[id]
 	delete(q.reqMap, id)

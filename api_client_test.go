@@ -31,7 +31,15 @@ func TestClientConnectDisconnect(t *testing.T) {
 	}
 
 	if err = c.Connect(); err != nil {
-		t.Fatalf("error connecting: %v", err)
+		t.Fatalf("error connecting (1): %v", err)
+	}
+	c.Disconnect()
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting (2): %v", err)
+	}
+	if err = c.Connect(); err == nil {
+		t.Fatalf("no error connecting after already connected. expected error")
 	}
 	c.Disconnect()
 }
@@ -171,7 +179,7 @@ func TestListenToFatalError(t *testing.T) {
 			cancel()
 		})
 	}
-	if err := c.ListenToClientEvent(ClientEventType_FatalErrorEvent, onFatalErrCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventType_FatalErrorEvent, onFatalErrCh); err != nil {
 		t.Fatalf("error listening to fatal error client event: %v", err)
 	}
 	if err := SpawnClientEventHandler(ctx, onFatalErrCh, onFatalErr); err != nil {
@@ -224,7 +232,7 @@ func TestAccountAuth(t *testing.T) {
 	}
 	defer c.Disconnect()
 
-	res, err := authenticateAccount(c, accountId, accessToken)
+	res, err := c.AuthenticateAccount(CtraderAccountId(accountId), AccessToken(accessToken))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +257,7 @@ func TestGetSymbols(t *testing.T) {
 	}
 	defer c.Disconnect()
 
-	if _, err = authenticateAccount(c, accountId, accessToken); err != nil {
+	if _, err = c.AuthenticateAccount(CtraderAccountId(accountId), AccessToken(accessToken)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -303,13 +311,13 @@ func TestReconnect(t *testing.T) {
 		t.Logf("reconnect failed: %v", e.Err)
 	}
 
-	if err := c.ListenToClientEvent(ClientEventType_ConnectionLossEvent, onConnLossCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, onConnLossCh); err != nil {
 		t.Fatalf("error listening to connection loss events: %v", err)
 	}
-	if err := c.ListenToClientEvent(ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh); err != nil {
 		t.Fatalf("error listening to reconnect success events: %v", err)
 	}
-	if err := c.ListenToClientEvent(ClientEventType_ReconnectFailEvent, onReconnectFailCh, ctx); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventType_ReconnectFailEvent, onReconnectFailCh); err != nil {
 		t.Fatalf("error listening to reconnect failure events: %v", err)
 	}
 
@@ -349,4 +357,275 @@ func TestReconnect(t *testing.T) {
 		t.Fatalf("error getting proxy version: %v", err)
 		return
 	}
+}
+
+func TestClientRateLimiter(t *testing.T) {
+	c, err := createApiClient(Environment_Demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+
+	// Create requests and send them concurrently to test if the rate limiter is able to handle
+	// the requests without causing the server to rate limit
+	numRequests := 500
+	wg := sync.WaitGroup{}
+	wg.Add(numRequests)
+
+	var reqErrs []error = make([]error, numRequests)
+
+	for i := range numRequests {
+		go func() {
+			defer wg.Done()
+
+			req := ProtoOAVersionReq{
+				PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+			}
+			var res ProtoOAVersionRes
+
+			reqCtx := context.Background()
+
+			reqData := RequestData{
+				Ctx:     reqCtx,
+				ReqType: PROTO_OA_VERSION_REQ,
+				Req:     &req,
+				ResType: PROTO_OA_VERSION_RES,
+				Res:     &res,
+			}
+
+			if err := c.SendRequest(reqData); err != nil {
+				reqErrs[i] = err
+				return
+			}
+		}()
+	}
+
+	// Wait for all requests to finish
+	wg.Wait()
+
+	c.Disconnect()
+
+	// Check for request errors
+	for _, e := range reqErrs {
+		if e != nil {
+			t.Fatalf("request error: %v", e)
+		}
+	}
+}
+
+func TestBatchRequestSendOnConnLoss(t *testing.T) {
+	c, err := createApiClient(Environment_Demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+
+	// Create requests and send them concurrently to check if each request makes a proper round trip
+	numRequests := 20
+	wg := sync.WaitGroup{}
+	wg.Add(numRequests)
+	var reqErrs []error = make([]error, numRequests)
+
+	connLossCh := make(chan ListenableClientEvent)
+	onConnLoss := func(e *ConnectionLossEvent) {
+		for i := range numRequests {
+			go func() {
+				defer wg.Done()
+
+				req := ProtoOAVersionReq{
+					PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+				}
+				var res ProtoOAVersionRes
+
+				reqCtx := context.Background()
+
+				reqData := RequestData{
+					Ctx:     reqCtx,
+					ReqType: PROTO_OA_VERSION_REQ,
+					Req:     &req,
+					ResType: PROTO_OA_VERSION_RES,
+					Res:     &res,
+				}
+
+				if err := c.SendRequest(reqData); err != nil {
+					reqErrs[i] = err
+					return
+				}
+			}()
+		}
+	}
+
+	if err := SpawnClientEventHandler(ctx, connLossCh, onConnLoss); err != nil {
+		t.Fatalf("error starting connection loss client event handler: %v", err)
+	}
+
+	if err := c.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, connLossCh); err != nil {
+		t.Fatalf("error listening to connection loss client event: %v", err)
+	}
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+
+	// Simulate connection loss right before sending requests
+	c.tcpClient.JustCloseConn()
+
+	// Wait for all requests to finish
+	wg.Wait()
+
+	c.Disconnect()
+
+	// Check for request errors
+	for _, e := range reqErrs {
+		if e != nil {
+			t.Fatalf("request error: %v", e)
+		}
+	}
+}
+
+func TestPreElectReqCtxCancel(t *testing.T) {
+	c, err := createApiClient(Environment_Demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	/*
+		Scenario 1:
+		Simulate connection loss state where BlockUntilReconnect handles the request ctx.
+		Cancel context before SendRequest call to force this behaviour.
+	*/
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+
+	// Stuff the request queue with 10 requests which is 200ms worth of
+	// request emission time (200ms due to rate limiter)
+	errCh := make(chan error)
+
+	connLossCh := make(chan ListenableClientEvent)
+	onConnLoss := func(e *ConnectionLossEvent) {
+		req := ProtoOAVersionReq{
+			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+		}
+		var res ProtoOAVersionRes
+
+		ctx, cancelCtx := context.WithCancel(context.Background())
+		cancelCtx()
+
+		reqData := RequestData{
+			Ctx:     ctx,
+			ReqType: PROTO_OA_VERSION_REQ,
+			Req:     &req,
+			ResType: PROTO_OA_VERSION_RES,
+			Res:     &res,
+		}
+
+		if err := c.SendRequest(reqData); err != nil {
+			errCh <- err
+		}
+		close(errCh)
+	}
+
+	if err := SpawnClientEventHandler(ctx, connLossCh, onConnLoss); err != nil {
+		t.Fatalf("error starting connection loss client event handler: %v", err)
+	}
+
+	if err := c.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, connLossCh); err != nil {
+		t.Fatalf("error listening to connection loss client event: %v", err)
+	}
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+	defer c.Disconnect()
+
+	// Simulate connection loss right before sending requests
+	c.tcpClient.JustCloseConn()
+
+	// Read from error channel
+	err, ok := <-errCh
+	if !ok {
+		t.Fatal("expected request context expired error, got no error")
+	}
+	var reqCtxExpErr *RequestContextExpiredError
+	if !errors.As(err, &reqCtxExpErr) {
+		t.Fatalf("expected request context expired error, got %v", err)
+	}
+}
+
+func TestPreElectReqCtxCancelBackpressure(t *testing.T) {
+	/*
+		Apply backpressure to the request queue to force the request heap to cancel in maximum
+		duration DefaultRequestHeapIterationTimeout (50ms) * 2
+	*/
+
+	c, err := createApiClient(Environment_Demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+	defer c.Disconnect()
+
+	numRequests := 250 // 5 seconds worth of backpressure due to rate limiter
+	wg := sync.WaitGroup{}
+	wg.Add(numRequests)
+	for range numRequests {
+		go func() {
+			defer wg.Done()
+			req := ProtoOAVersionReq{
+				PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+			}
+			var res ProtoOAVersionRes
+
+			reqCtx := context.Background()
+
+			reqData := RequestData{
+				Ctx:     reqCtx,
+				ReqType: PROTO_OA_VERSION_REQ,
+				Req:     &req,
+				ResType: PROTO_OA_VERSION_RES,
+				Res:     &res,
+			}
+
+			c.SendRequest(reqData)
+		}()
+	}
+
+	time.Sleep(time.Second * 2) // Wait two seconds to ensure backpressure applies
+
+	// Send the request with immediately cancelled context
+	req := ProtoOAVersionReq{
+		PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+	}
+	var res ProtoOAVersionRes
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	cancelCtx()
+
+	reqData := RequestData{
+		Ctx:     ctx,
+		ReqType: PROTO_OA_VERSION_REQ,
+		Req:     &req,
+		ResType: PROTO_OA_VERSION_RES,
+		Res:     &res,
+	}
+
+	err = c.SendRequest(reqData)
+	if err == nil {
+		t.Fatal("expected request context expired error, got no error")
+	}
+
+	var reqCtxExpErr *RequestContextExpiredError
+	if !errors.As(err, &reqCtxExpErr) {
+		t.Fatalf("expected request context expired error, got %v", err)
+	}
+
+	wg.Wait()
 }

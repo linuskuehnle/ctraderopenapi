@@ -15,15 +15,30 @@
 package datatypes
 
 import (
-	"github.com/google/uuid"
-	"github.com/linuskuehnle/ctraderopenapi/messages"
-
 	"context"
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/linuskuehnle/ctraderopenapi/messages"
 )
+
+type CtraderAccountId int64
+
+// CheckError validates the account id. It returns a non-nil error when
+// the id is invalid (zero). Additional validation rules can be added
+// later if required.
+func (id CtraderAccountId) CheckError() error {
+	if id == 0 {
+		return fmt.Errorf("cTrader account ID must not be empty")
+	}
+	return nil
+}
+
+type AccessToken string
+type RefreshToken string
 
 type RequestId string
 
@@ -46,10 +61,11 @@ type RequestMetaData struct {
 	Id RequestId
 
 	ErrCh     chan error
+	HeapErrCh chan error
 	ResDataCh chan *ResponseData
 }
 
-func NewRequestMetaData(reqData *RequestData, errCh chan error, resDataCh chan *ResponseData) (*RequestMetaData, error) {
+func NewRequestMetaData(reqData *RequestData, errCh chan error, heapErrCh chan error, resDataCh chan *ResponseData) (*RequestMetaData, error) {
 	if reqData == nil {
 		return nil, &FunctionInvalidArgError{
 			FunctionName: "NewRequestMetaData",
@@ -72,6 +88,7 @@ func NewRequestMetaData(reqData *RequestData, errCh chan error, resDataCh chan *
 		RequestData: reqData,
 		Id:          RequestId(id.String()),
 		ErrCh:       errCh,
+		HeapErrCh:   heapErrCh,
 		ResDataCh:   resDataCh,
 	}
 

@@ -27,13 +27,73 @@ func (e *FunctionInvalidArgError) Error() string {
 	return fmt.Sprintf("invalid argument on function %s: %v", e.FunctionName, e.Err)
 }
 
-type RequestContextExpiredError struct {
-	Err error
+/*
+	account_manager.go
+*/
+
+type AccessTokenAlreadyExistsError struct {
+	AccessToken AccessToken
 }
 
-func (e *RequestContextExpiredError) Error() string {
-	return fmt.Sprintf("request context expired: %v", e.Err)
+func (e *AccessTokenAlreadyExistsError) Error() string {
+	return fmt.Sprintf("access token %s already exists on account manager", e.AccessToken)
 }
+
+type AccessTokenDoesNotExist struct {
+	AccessToken AccessToken
+}
+
+func (e *AccessTokenDoesNotExist) Error() string {
+	return fmt.Sprintf("access token %s does not exist on account manager", e.AccessToken)
+}
+
+type AccountIdAlreadyExistsError struct {
+	AccountId   CtraderAccountId
+	AccessToken AccessToken
+}
+
+func (e *AccountIdAlreadyExistsError) Error() string {
+	return fmt.Sprintf("account id %d on access token %s already exists on account manager", e.AccountId, e.AccessToken)
+}
+
+type AccountIdDoesNotExist struct {
+	AccountId CtraderAccountId
+}
+
+func (e *AccountIdDoesNotExist) Error() string {
+	return fmt.Sprintf("account id %d does not exist on account manager", e.AccountId)
+}
+
+type AccountIdDoesNotExistOnToken struct {
+	AccountId   CtraderAccountId
+	AccessToken AccessToken
+}
+
+func (e *AccountIdDoesNotExistOnToken) Error() string {
+	return fmt.Sprintf("account id %d does not exist on token %s on account manager", e.AccountId, e.AccessToken)
+}
+
+type EventSubscriptionAlreadyExistsError[EventT comparable] struct {
+	EventType EventT
+	AccountId CtraderAccountId
+}
+
+func (e *EventSubscriptionAlreadyExistsError[EventT]) Error() string {
+	return fmt.Sprintf("event type %v on account id %d already exists on account manager", e.EventType, e.AccountId)
+}
+
+type EventSubscriptionNotExistingError[EventT comparable] struct {
+	EventType EventT
+	AccountId CtraderAccountId
+}
+
+func (e *EventSubscriptionNotExistingError[EventT]) Error() string {
+	return fmt.Sprintf("event type %v on account id %d does not exist on account manager", e.EventType, e.AccountId)
+}
+
+/*
+	event_handler.go
+*/
 
 type IdAlreadyIncludedError struct {
 	Id        EventId
@@ -52,6 +112,10 @@ func (e *IdNotIncludedError) Error() string {
 	return fmt.Sprintf("id %d is not included in event handler", e.Id)
 }
 
+/*
+	lifecycle.go
+*/
+
 type LifeCycleAlreadyRunningError struct {
 	CallContext string
 }
@@ -66,6 +130,18 @@ type LifeCycleNotRunningError struct {
 
 func (e *LifeCycleNotRunningError) Error() string {
 	return fmt.Sprintf("%s: life cycle not running", e.CallContext)
+}
+
+/*
+	request_heap.go
+*/
+
+type RequestContextExpiredError struct {
+	Err error
+}
+
+func (e *RequestContextExpiredError) Error() string {
+	return fmt.Sprintf("request context expired: %v", e.Err)
 }
 
 type RequestHeapAlreadyRunningError struct {

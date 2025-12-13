@@ -15,14 +15,12 @@
 package ctraderopenapi
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
-	"google.golang.org/protobuf/proto"
 )
 
 func LoadAppCredentialsFromEnv() (ApplicationCredentials, error) {
@@ -78,27 +76,4 @@ func createApiClient(env Environment) (*apiClient, error) {
 	}
 
 	return h, nil
-}
-
-func authenticateAccount(c *apiClient, ctid int64, accessToken string) (*ProtoOAAccountAuthRes, error) {
-	req := ProtoOAAccountAuthReq{
-		CtidTraderAccountId: proto.Int64(ctid),
-		AccessToken:         proto.String(accessToken),
-	}
-	var res ProtoOAAccountAuthRes
-
-	reqCtx := context.Background()
-
-	reqData := RequestData{
-		Ctx:     reqCtx,
-		ReqType: PROTO_OA_ACCOUNT_AUTH_REQ,
-		Req:     &req,
-		ResType: PROTO_OA_ACCOUNT_AUTH_RES,
-		Res:     &res,
-	}
-
-	if err := c.SendRequest(reqData); err != nil {
-		return nil, fmt.Errorf("error sending account auth request: %v", err)
-	}
-	return &res, nil
 }

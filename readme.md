@@ -7,10 +7,7 @@ OpenAPI proxy. It focuses on a small, testable public surface for:
 - subscribing to and listening for streaming server events (push-style),
 - a concurrency-safe event dispatcher and small adapters to wire typed
 	handlers without reflection.
-
-The library deliberately keeps runtime behaviour explicit and conservative
-— networking resilience and reconnect logic are provided but intentionally
-simple so they are easy to reason about and test.
+- an client-side request rate limiter to prevent server-side rate limiting.
 
 Contents
 - Quick highlights
@@ -22,13 +19,15 @@ Contents
 
 ## Quick highlights
 
-- Typed, protobuf-backed request/response helpers (package `messages`).
-- Streaming event subscription and listening API: `SubscribeEvent`,
-	`UnsubscribeEvent`, `ListenToEvent` on the `APIClient` implementation.
-- Concurrency-safe event dispatch implemented by `datatypes.EventHandler`.
-- Small typed adapters (`SpawnEventHandler`, `SpawnClientEventHandler`) that
+- Typed, protobuf-backed request/response helpers.
+- Event handler for both API and client events providing easy abstraction via
+	subscribe/unsubscribe and listen functions.
+- Client-side rate limiter to avoid server-side rate limiting.
+- Small typed adapters (`SpawnAPIEventHandler`, `SpawnClientEventHandler`) that
 	adapt generic channels to typed callbacks (they perform runtime type
 	assertions and will drop non-matching events).
+- Connection loss handling; recovering authenticated accounts and active
+	subscriptions on reconnect.
 
 ## Installation
 
@@ -65,41 +64,53 @@ full comments and examples):
 	- `Connect() error` / `Disconnect()`
 	- `SendRequest(RequestData) error` — sends a protobuf-typed request and
 		unmarshals the response into the provided response object.
-	- `SubscribeEvent(SubscribableEventData)` / `UnsubscribeEvent(...)` —
+	- `SubscribeAPIEvent(SubscribableAPIEventData)` / `UnsubscribeAPIEvent(...)` —
 		subscribe/unsubscribe for server-side subscription-based events.
-	- `ListenToEvent(eventType, chan ListenableEvent, ctx)` — register a
+	- `SubscribeClientEvent(SubscribableClientEventData)` / `UnsubscribeClientEvent(...)` —
+		subscribe/unsubscribe for client-side events.
+	- `ListenToAPIEvent(ctx, eventType, chan ListenableAPIEvent)` — register a
 		long-running listener channel for push events.
-	- `ListenToClientEvent(clientEventType, chan ListenableClientEvent, ctx)`
-		— listen for client events (fatal client errors, connection loss, reconnect success
-		and reconnect fail).
+	- `ListenToClientEvent(ctx, clientEventType, chan ListenableClientEvent)`
+		— listen for client-side events
+	
+	Client-side events are e.g. fatal client errors, connection loss, reconnect success
+	and reconnect fail.
 	
 	Fatal (non-recoverable) client errors will be emitted as client event of type
-	FatalErrorEvent. If there is no listener channel installed, that error will be raised
-	as a panic instead.
+	FatalErrorEvent. If there is a listener channel installed, the error will be sent to
+	the channel and the API client recovers by dropping the tcp connection and running the
+	reconnect sequence.
+	If there is no listener channel installed for the fatal error event, a fatal error will
+	be raised as a panic instead.
 
 	The API Client takes care of connection losses. You can listen to reconnect events
 	(ConnectionLossEvent, ReconnectSuccessEvent, ReconnectFailEvent) using ListenToClientEvent.
+	API Events subscribed to will automatically be resubscribed before ReconnectSuccessEvent is
+	emitted.
 
-- `ApplicationCredentials{ ClientId, ClientSecret }` — credentials used by
-	the application to authenticate to the OpenAPI. Validate with
-	`CheckError()`.
+	Runtime configuration:
+	- `WithQueueBufferSize(int)` updates the number of queued requests that may be buffered
+		by the internal request queue before backpressure applies.
+	- `WithTCPMessageBufferSize(int)` updates the size of the channel used to receive inbound
+		TCP messages from the network reader.
+	- `WithRequestHeapIterationTimeout(time.Duration)` updates interval used by the request heap
+		to periodically check for expired request contexts.
+	- `DisableDefaultRateLimiter()` to disable the client-side rate limiter.
 
-- `APIClientConfig` — runtime configuration (queue buffer sizes and the
-	request heap iteration timeout). Use `DefaultAPIClientConfig()` to obtain
-	sensible defaults and call `WithConfig` on the client before `Connect`.
+	The rate limiter ensures that the 50 live requests per second and 5 historical requests per
+	second are not exceeded. In case there still occurs a server-side rate limit due to network
+	divergence (very unlikely) it enqueues the request again, so the caller does not have to worry
+	about it.
 
-- Subscription helpers (used with `SubscribeEvent` / `UnsubscribeEvent`):
-	- `SubscribableEventData{EventType, SubcriptionData}`
-	- `SubscriptionDataSpotEvent{ CtraderAccountId, SymbolIds []int64 }`
-	- `SubscriptionDataLiveTrendbarEvent{ CtraderAccountId, SymbolId, Period }`
-	- `SubscriptionDataDepthQuoteEvent{ CtraderAccountId, SymbolIds }`
+- `ApplicationCredentials{ ClientId, ClientSecret }` — credentials used by the application to
+	authenticate to the OpenAPI. Validate with `CheckError()`.
 
 - Event adapters & helpers:
 	- `ListenableEvent` and `ListenableClientEvent` are marker interfaces.
-	- `CastToEventType[T]` and `CastToClientEventType[T]` helpers to cast
-		the generic event type to the concrete event types.
-	- `SpawnEventHandler` and `SpawnClientEventHandler` start small goroutines
-		that forward typed events to your handler.
+	- `CastToEventType[T]` and `CastToClientEventType[T]` helpers to cast the generic event type
+		to the concrete event types.
+	- `SpawnAPIEventHandler` and `SpawnClientEventHandler` start small goroutines that forward
+		typed events to your handler.
 
 ## Examples
 
@@ -151,22 +162,22 @@ ctx, cancel := context.WithCancel(context.Background())
 defer cancel()
 
 onEventCh := make(chan ctraderopenapi.ListenableEvent)
-if err := client.ListenToEvent(ctraderopenapi.EventType_Spots, onEventCh, ctx); err != nil {
+if err := client.ListenToAPIEvent(ctx, ctraderopenapi.APIEventType_Spots, onEventCh); err != nil {
 	panic(err)
 }
 
-_ = ctraderopenapi.SpawnEventHandler(ctx, onEventCh, func(e *ctraderopenapi.ProtoOASpotEvent) {
+_ = ctraderopenapi.SpawnAPIEventHandler(ctx, onEventCh, func(e *ctraderopenapi.ProtoOASpotEvent) {
 	fmt.Println("spot event:", e)
 })
 
-sub := ctraderopenapi.SubscribableEventData{
+sub := ctraderopenapi.SubscribableAPIEventData{
 	EventType: ctraderopenapi.EventType_Spots,
 	SubcriptionData: &ctraderopenapi.SubscriptionDataSpotEvent{
 		CtraderAccountId: ctraderopenapi.CtraderAccountId(123456),
 		SymbolIds:        []int64{1, 2, 3},
 	},
 }
-if err := client.SubscribeEvent(sub); err != nil {
+if err := client.SubscribeAPIEvent(sub); err != nil {
 	panic(err)
 }
 ```
@@ -176,7 +187,7 @@ if err := client.SubscribeEvent(sub); err != nil {
 ```go
 
 clientCh := make(chan ctraderopenapi.ListenableClientEvent)
-if err := client.ListenToClientEvent(ctraderopenapi.ClientEventType_ReconnectSuccessEvent, clientCh, context.Background()); err != nil {
+if err := client.ListenToClientEvent(context.Background(), ctraderopenapi.ClientEventType_ReconnectSuccessEvent, clientCh); err != nil {
 	panic(err)
 }
 ctraderopenapi.SpawnClientEventHandler(context.Background(), clientCh, func(e *ctraderopenapi.ReconnectSuccessEvent) {

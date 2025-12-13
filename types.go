@@ -21,33 +21,22 @@ import (
 	"time"
 )
 
-// APIClientConfig configures runtime buffer sizes and timeouts used by
-// the API client. These values provide reasonable defaults but can be
-// adjusted with `WithConfig` before calling `Connect`.
-//
-// Fields:
-//   - QueueBufferSize: number of queued requests that may be buffered by
-//     the internal request queue before backpressure applies.
-//   - TCPMessageBufferSize: size of the channel used to receive inbound
-//     TCP messages from the network reader.
-//   - RequestHeapIterationTimeout: interval used by the request heap to
-//     periodically check for expired request contexts.
-type APIClientConfig struct {
-	QueueBufferSize             int
-	TCPMessageBufferSize        int
-	RequestHeapIterationTimeout time.Duration
+type apiClientConfig struct {
+	queueBufferSize             int
+	tcpMessageBufferSize        int
+	requestHeapIterationTimeout time.Duration
 }
 
-// DefaultAPIClientConfig returns a configuration with conservative,
-// production-suitable defaults. Callers may modify the returned struct
-// and pass it to `WithConfig` on the API client before connecting.
-func DefaultAPIClientConfig() APIClientConfig {
-	return APIClientConfig{
-		QueueBufferSize:             DefaultQueueBufferSize,
-		TCPMessageBufferSize:        DefaultTCPMessageBufferSize,
-		RequestHeapIterationTimeout: DefaultRequestHeapIterationTimeout,
+func defaultAPIClientConfig() apiClientConfig {
+	return apiClientConfig{
+		queueBufferSize:             ConfigDefault_QueueBufferSize,
+		tcpMessageBufferSize:        ConfigDefault_TCPMessageBufferSize,
+		requestHeapIterationTimeout: ConfigDefault_RequestHeapIterationTimeout,
 	}
 }
+
+// Used for referencing requests to the rate limit type (live/historical).
+type rateLimitType int
 
 // endpointAddress is the type used for endpoint address constants.
 type endpointAddress string
@@ -69,20 +58,16 @@ func (env Environment) GetAddress() endpointAddress {
 
 // CtraderAccountId represents a cTrader account identifier.
 // It is a thin typed alias over int64 to make call sites explicit.
-type CtraderAccountId int64
+type CtraderAccountId = datatypes.CtraderAccountId
 
-// CheckError validates the account id. It returns a non-nil error when
-// the id is invalid (zero). Additional validation rules can be added
-// later if required.
-func (id CtraderAccountId) CheckError() error {
-	if id == 0 {
-		return fmt.Errorf("cTrader account ID must not be empty")
-	}
+// AccessToken is the token that is being used to access a set of account ids.
+// It is a thin typed alias over string to make call sites explicit.
+type AccessToken = datatypes.AccessToken
 
-	// Further validation can be added here if needed (like length or format checks)
-
-	return nil
-}
+// RefreshToken is the token that is being used to update the AccessToken
+// when it expires.
+// It is a thin typed alias over string to make call sites explicit.
+type RefreshToken = datatypes.RefreshToken
 
 // ApplicationCredentials holds the client credentials required to
 // authenticate the application with the cTrader OpenAPI proxy.
@@ -105,11 +90,6 @@ func (c ApplicationCredentials) CheckError() error {
 	return nil
 }
 
-// Event types for ListenToEvent and ListenToClientEvent
-// Use these typed aliases to make intent explicit in public APIs.
-type eventType datatypes.EventId
-type clientEventType datatypes.EventId
-
 // RequestData is the argument struct for SendRequest.
 //   - Ctx: Request context. If context.Err() is not nil, the request response will not be awaited or if the
 //     request is still in queue it will be removed from queue. Either way SendRequest will abort and return context.Err().
@@ -119,13 +99,20 @@ type clientEventType datatypes.EventId
 //   - Res: Pointer to an empty protobuf message struct where the response will be unmarshalled into.
 type RequestData = datatypes.RequestData
 
+type eventType = datatypes.EventId
+
+// Event types for ListenToAPIEvent and ListenToClientEvent
+// Use these typed aliases to make intent explicit in public APIs.
+type apiEventType = eventType
+type clientEventType = eventType
+
 // ListenableEvent marks protobuf message types that can be listened to
 // (push-style events). Implemented by generated protobuf message types
 // in the `messages` package with a zero-sized method.
 //
 // These event types are delivered by the server independently from any
 // single client's request; users can register callbacks using
-// `ListenToEvent` which will receive a `ListenableEvent` value when a
+// `ListenToAPIEvent` which will receive a `ListenableEvent` value when a
 // matching event occurs.
 type ListenableEvent interface {
 	IsListenableEvent()
@@ -162,22 +149,22 @@ func CastToClientEventType[T ListenableClientEvent](event ListenableClientEvent)
 // SubscriptionData describes data required to subscribe or unsubscribe
 // to a subscription-based event (for example, account id and symbol
 // ids for the Spots event). Implementations validate their fields via
-// `CheckError` and are passed to `SubscribeEvent` / `UnsubscribeEvent`.
+// `CheckError` and are passed to `SubscribeAPIEvent` / `UnsubscribeAPIEvent`.
 type SubscriptionData interface {
 	// CheckError validates the subscription payload and returns a
 	// non-nil error when the payload is invalid.
 	CheckError() error
 }
 
-// SubscribableEventData groups the event type and subscription-specific
-// data for `SubscribeEvent` and `UnsubscribeEvent` calls.
+// SubscribableAPIEventData groups the event type and subscription-specific
+// data for `SubscribeAPIEvent` and `UnsubscribeAPIEvent` calls.
 //
 //   - EventType selects which server-side event to subscribe/unsubscribe.
 //   - SubcriptionData is a concrete struct implementing `SubscriptionData`
 //     that provides the required parameters for that event (for example,
 //     account id and symbol ids for Spot events).
-type SubscribableEventData struct {
-	EventType       eventType
+type SubscribableAPIEventData struct {
+	EventType       apiEventType
 	SubcriptionData SubscriptionData
 }
 

@@ -538,13 +538,18 @@ func (c *tcpClient) handleInputStream(ctx context.Context) {
 				reconnectCh := make(chan struct{})
 				go c.execReconnectLoop(ctx, reconnectCh)
 
-				// Wait for reconnectCh to complete
-				_, ok := <-reconnectCh
-				if !ok {
-					// Reconnect failed or context has been cancelled. No reconnect signal has been emitted.
+				select {
+				case <-ctx.Done():
+					// Context canceled — connection is being closed gracefully
 					return
+				case _, ok := <-reconnectCh:
+					if !ok {
+						// Reconnect failed or context has been cancelled. No reconnect signal has been emitted.
+						return
+					}
 				}
 
+				// Reconnect successful
 				if c.onReconnectSuccess != nil {
 					c.onReconnectSuccess()
 				}

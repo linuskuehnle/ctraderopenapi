@@ -123,6 +123,8 @@ func (h *requestHeap) checkRequestContexts() {
 	// then notify their ErrCh channels without holding the lock to avoid blocking other
 	// operations on the heap.
 	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	var expired []*RequestMetaData
 
 	// iterate and remove expired nodes in-place
@@ -142,20 +144,23 @@ func (h *requestHeap) checkRequestContexts() {
 		i++
 	}
 
-	h.mu.Unlock()
+	wg := sync.WaitGroup{}
+	wg.Add(len(expired))
 
 	// Notify expired nodes outside lock. For each expired node send a RequestContextExpiredError
 	// and then close the channel. We perform the send inside a goroutine to avoid blocking the
 	// requestHeap ticker if a receiver isn't actively reading.
 	for _, n := range expired {
 		// capture channel and context error
-		ch := n.ErrCh
+		ch := n.HeapErrCh
 		ctxErr := error(nil)
 		if n.Ctx != nil {
 			ctxErr = n.Ctx.Err()
 		}
 
 		go func(ch chan error, e error) {
+			defer wg.Done()
+
 			// send the RequestContextExpiredError if possible and then close channel to signal
 			// completion. If e is nil, still close the channel to indicate removal.
 			if e != nil {
@@ -165,6 +170,8 @@ func (h *requestHeap) checkRequestContexts() {
 			close(ch)
 		}(ch, ctxErr)
 	}
+
+	wg.Wait()
 }
 
 func (h *requestHeap) AddNode(node *RequestMetaData) error {
@@ -200,6 +207,9 @@ func (h *requestHeap) RemoveNode(id RequestId) (*RequestMetaData, error) {
 			last := len(h.heap) - 1
 			h.heap[i] = h.heap[last]
 			h.heap = h.heap[:last]
+
+			// close the heap error channel with no error
+			close(node.HeapErrCh)
 
 			return node, nil
 		}
