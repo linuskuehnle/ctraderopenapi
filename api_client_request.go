@@ -107,6 +107,9 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 	if reqData.Ctx == nil {
 		reqData.Ctx = context.Background()
 	}
+	ctx, cancelCtx := context.WithTimeout(reqData.Ctx, c.cfg.requestTimeout)
+	reqData.Ctx = ctx
+	defer cancelCtx()
 
 	expectedResType, exists := resTypeByReqType[reqData.ReqType]
 	if !exists {
@@ -143,6 +146,7 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 		return err
 	}
 
+	err = nil
 	var heapErrChClosed, errChClosed bool
 	for !heapErrChClosed || !errChClosed {
 		select {
@@ -151,14 +155,17 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 				heapErrChClosed = true
 				continue
 			}
-			return reqCtxExpiredErr
+			err = reqCtxExpiredErr
 		case reqErr, ok := <-errCh:
 			if !ok {
 				errChClosed = true
 				continue
 			}
-			return reqErr
+			err = reqErr
 		}
+
+		close(resDataCh)
+		return err
 	}
 
 	resData := <-resDataCh
@@ -197,11 +204,8 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 }
 
 func (c *apiClient) authenticateApp() error {
-	ctx, cancelCtx := context.WithTimeout(context.Background(), appAuthReqTimeout)
-	defer cancelCtx()
-
 	reqData := RequestData{
-		Ctx:     ctx,
+		Ctx:     context.Background(),
 		ReqType: PROTO_OA_APPLICATION_AUTH_REQ,
 		Req: &messages.ProtoOAApplicationAuthReq{
 			ClientId:     proto.String(c.cred.ClientId),

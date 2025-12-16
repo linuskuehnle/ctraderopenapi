@@ -18,12 +18,10 @@ func (c *apiClient) onQueueData() {
 		return
 	}
 
-	reqErrCh := reqMetaData.ErrCh
-
 	// Check if the request context has expired already. In that case the request has
 	// been cleaned up already and should not be further processed.
 	if reqMetaData.Ctx.Err() != nil {
-		close(reqErrCh) // For completeness only
+		close(reqMetaData.ErrCh) // For completeness only
 		return
 	}
 
@@ -31,7 +29,7 @@ func (c *apiClient) onQueueData() {
 	expectRes := reqMetaData.ResDataCh != nil
 	if !expectRes {
 		// If no response is expected, close the channel immediately after sending payload
-		defer close(reqErrCh)
+		defer close(reqMetaData.ErrCh)
 	}
 
 	// Check if internal rate limiter is being used
@@ -45,12 +43,12 @@ func (c *apiClient) onQueueData() {
 	}
 
 	if err := c.handleSendPayload(reqMetaData); err != nil {
-		if reqErrCh != nil {
-			reqErrCh <- err
+		if reqMetaData.ErrCh != nil {
+			reqMetaData.ErrCh <- err
 
 			// This check is required to avoid closing a closed channel when no response is expected
 			if expectRes {
-				close(reqErrCh)
+				close(reqMetaData.ErrCh)
 			}
 		}
 	}
@@ -132,6 +130,7 @@ func (c *apiClient) onTCPMessage(msgBytes []byte) {
 			ProtoMsg:    &protoMsg,
 			PayloadType: msgOAPayloadType,
 		}
+		close(reqMetaData.ResDataCh)
 		return
 	}
 }
@@ -166,7 +165,7 @@ func (c *apiClient) onConnectionLoss() {
 }
 
 func (c *apiClient) onReconnectSuccess() {
-	jobErrCh := make(chan error, 3)
+	jobErrCh := make(chan error)
 
 	go func() {
 		if err := c.authenticateApp(); err != nil {

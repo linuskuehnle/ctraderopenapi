@@ -68,7 +68,6 @@ func (q *requestQueue) Clear() {
 		return
 	}
 
-	close(q.onDataCh)
 	q.onDataCh = nil
 }
 

@@ -344,10 +344,6 @@ func (c *tcpClient) cleanupMessageHandling() {
 		return
 	}
 
-	if c.messageHandling.onMessageCh != nil {
-		close(c.messageHandling.onMessageCh)
-	}
-
 	c.messageHandling = nil
 }
 

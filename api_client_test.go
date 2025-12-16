@@ -167,23 +167,43 @@ func TestListenToFatalError(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var once sync.Once
+	var onceFatalErr sync.Once
 
-	onFatalErrCh := make(chan ListenableClientEvent)
+	errCh := make(chan error)
+
+	fatalErrCh := make(chan ListenableClientEvent)
 	onFatalErr := func(e *FatalErrorEvent) {
 		fatalErr := e.Err
 		if fatalErr.Error() != "test fatal error" {
 			t.Fatalf("expected fatal error 'test fatal error', got: %v", fatalErr)
 		}
-		once.Do(func() {
-			cancel()
+		onceFatalErr.Do(func() {
+			errCh <- e.Err
+			close(errCh)
 		})
 	}
-	if err := c.ListenToClientEvent(ctx, ClientEventType_FatalErrorEvent, onFatalErrCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventType_FatalErrorEvent, fatalErrCh); err != nil {
 		t.Fatalf("error listening to fatal error client event: %v", err)
 	}
-	if err := SpawnClientEventHandler(ctx, onFatalErrCh, onFatalErr); err != nil {
-		t.Fatalf("error spawning client event handler: %v", err)
+	if err := SpawnClientEventHandler(ctx, fatalErrCh, onFatalErr); err != nil {
+		t.Fatalf("error spawning fatal error client event handler: %v", err)
+	}
+
+	var onceRecSucc sync.Once
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	recSuccCh := make(chan ListenableClientEvent)
+	onRecSucc := func(e *ReconnectSuccessEvent) {
+		onceRecSucc.Do(func() {
+			wg.Done()
+		})
+	}
+	if err := c.ListenToClientEvent(ctx, ClientEventType_ReconnectSuccessEvent, recSuccCh); err != nil {
+		t.Fatalf("error listening to reconnect success client event: %v", err)
+	}
+	if err := SpawnClientEventHandler(ctx, recSuccCh, onRecSucc); err != nil {
+		t.Fatalf("error spawning reconnect success client event handler: %v", err)
 	}
 
 	if err = c.Connect(); err != nil {
@@ -191,14 +211,21 @@ func TestListenToFatalError(t *testing.T) {
 	}
 	defer c.Disconnect()
 
-	// Manually trigger a fatal error
-	c.fatalErrCh <- errors.New("test fatal error")
+	emitErrText := "test fatal error"
 
-	select {
-	case <-ctx.Done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for fatal error")
+	// Manually trigger a fatal error
+	c.fatalErrCh <- errors.New(emitErrText)
+
+	err, ok := <-errCh
+	if !ok {
+		t.Fatal("expected error, received no error before errCh close")
 	}
+	if receivedErrText := err.Error(); receivedErrText != emitErrText {
+		t.Fatalf("expected error text\"%s\", received %s", emitErrText, receivedErrText)
+	}
+
+	wg.Wait()
+	cancel()
 }
 
 func TestHeartbeatEmission(t *testing.T) {
@@ -365,13 +392,18 @@ func TestClientRateLimiter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = c.Connect(); err != nil {
-		t.Fatalf("error connecting: %v", err)
-	}
-
 	// Create requests and send them concurrently to test if the rate limiter is able to handle
 	// the requests without causing the server to rate limit
 	numRequests := 500
+	// Apply a big enough request timeout to ensure the requests do not fail due to timeout
+	c.WithRequestTimeout(
+		( /* Client side rate limiter constraint */ time.Second/49)*time.Duration(numRequests) +
+			/* Round trip time */ time.Millisecond*10*time.Duration(numRequests),
+	)
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
 	wg := sync.WaitGroup{}
 	wg.Add(numRequests)
 

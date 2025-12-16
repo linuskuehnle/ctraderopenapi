@@ -21,12 +21,10 @@ import (
 )
 
 const (
+	ConfigDefault_RequestTimeout              = time.Second * 5
 	ConfigDefault_QueueBufferSize             = 10
 	ConfigDefault_TCPMessageBufferSize        = 10
 	ConfigDefault_RequestHeapIterationTimeout = datatypes.DefaultRequestHeapIterationTimeout
-
-	appAuthReqTimeout        = time.Second * 1
-	fatalErrReconnectTimeout = time.Second * 3
 )
 
 const (

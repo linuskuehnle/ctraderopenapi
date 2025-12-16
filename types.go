@@ -22,6 +22,7 @@ import (
 )
 
 type apiClientConfig struct {
+	requestTimeout              time.Duration
 	queueBufferSize             int
 	tcpMessageBufferSize        int
 	requestHeapIterationTimeout time.Duration
@@ -29,6 +30,7 @@ type apiClientConfig struct {
 
 func defaultAPIClientConfig() apiClientConfig {
 	return apiClientConfig{
+		requestTimeout:              ConfigDefault_RequestTimeout,
 		queueBufferSize:             ConfigDefault_QueueBufferSize,
 		tcpMessageBufferSize:        ConfigDefault_TCPMessageBufferSize,
 		requestHeapIterationTimeout: ConfigDefault_RequestHeapIterationTimeout,

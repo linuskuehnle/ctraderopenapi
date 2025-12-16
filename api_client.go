@@ -48,6 +48,12 @@ import (
 //     SendRequest, SubscribeAPIEvent/UnsubscribeAPIEvent, or ListenToAPIEvent as
 //     required. Call Disconnect when finished.
 type APIClient interface {
+	// WithQueueBufferSize updates the duration until a request roundtrip is aborted no
+	// matter if already sent or not.
+	// It must be called while the client is not connected (before `Connect`) and returns
+	// the same client to allow fluent construction.
+	WithRequestTimeout(time.Duration) APIClient
+
 	// WithQueueBufferSize updates the number of queued requests that may be buffered
 	// by the internal request queue before backpressure applies.
 	// It must be called while the client is not connected (before `Connect`) and returns
@@ -255,8 +261,6 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		cred: cred,
 
 		connMu: sync.Mutex{},
-
-		fatalErrCh: make(chan error),
 	}
 
 	c.tcpClient = tcp.NewTCPClient(string(env.GetAddress())).
@@ -270,6 +274,18 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 	c.rateLimiters[rateLimitType_Historical], _ = datatypes.NewRateLimiter(rateLimitN_Historical-1, rateLimitInterval, rateLimitHitTimeout)
 
 	return &c, nil
+}
+
+func (c *apiClient) WithRequestTimeout(timeout time.Duration) APIClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.lifecycleData.IsClientInitialized() {
+		return c
+	}
+
+	c.cfg.requestTimeout = timeout
+	return c
 }
 
 func (c *apiClient) WithQueueBufferSize(queueBufferSize int) APIClient {
@@ -345,6 +361,8 @@ func (c *apiClient) connect() error {
 		}
 	}
 
+	c.fatalErrCh = make(chan error)
+
 	// Config specific setup
 	c.queueDataCh = make(chan struct{}, c.cfg.queueBufferSize)
 	c.tcpMessageCh = make(chan []byte, c.cfg.tcpMessageBufferSize)
@@ -410,6 +428,10 @@ func (c *apiClient) disconnect() {
 
 	c.apiEventHandler.Clear()
 	c.clientEventHandler.Clear()
+
+	close(c.fatalErrCh)
+	close(c.queueDataCh)
+	close(c.tcpMessageCh)
 }
 
 func (c *apiClient) enqueueRequest(reqMetaData *datatypes.RequestMetaData) error {
