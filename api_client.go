@@ -48,7 +48,7 @@ import (
 //     SendRequest, SubscribeAPIEvent/UnsubscribeAPIEvent, or ListenToAPIEvent as
 //     required. Call Disconnect when finished.
 type APIClient interface {
-	// WithQueueBufferSize updates the duration until a request roundtrip is aborted no
+	// WithRequestTimeout updates the duration until a request roundtrip is aborted no
 	// matter if already sent or not.
 	// It must be called while the client is not connected (before `Connect`) and returns
 	// the same client to allow fluent construction.
