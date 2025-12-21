@@ -42,7 +42,7 @@ func TestSubscribeUnsubscribeAPIEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var symbolId int64 = 315 // "German 40 Index, Spot CFD"
+	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 	subData := SubscribableAPIEventData{
 		EventType: APIEventType_Spots,
 		SubcriptionData: &SubscriptionDataSpotEvent{
@@ -99,7 +99,7 @@ func TestListenEvent(t *testing.T) {
 		t.Fatalf("error registering event listener: %v", err)
 	}
 
-	var symbolId int64 = 315 // "German 40 Index, Spot CFD"
+	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 
 	subData := SubscribableAPIEventData{
 		EventType: APIEventType_Spots,
@@ -144,7 +144,7 @@ func TestResubscribeOnReconnect(t *testing.T) {
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	var symbolId int64 = 315 // "German 40 Index, Spot CFD"
+	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 	subData := SubscribableAPIEventData{
 		EventType: APIEventType_Spots,
 		SubcriptionData: &SubscriptionDataSpotEvent{
@@ -249,7 +249,7 @@ func TestListenEventWithSpawnAPIEventHandler(t *testing.T) {
 		t.Fatalf("error registering event listener: %v", err)
 	}
 
-	var symbolId int64 = 315 // "German 40 Index, Spot CFD"
+	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 
 	subData := SubscribableAPIEventData{
 		EventType: APIEventType_Spots,
@@ -313,7 +313,7 @@ func TestLiveTrendbarEvent(t *testing.T) {
 		t.Fatalf("error registering spots event listener: %v", err)
 	}
 
-	var symbolId int64 = 315 // "German 40 Index, Spot CFD"
+	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 
 	subDataLiveTrendbars := SubscribableAPIEventData{
 		EventType: APIEventType_LiveTrendbars,
