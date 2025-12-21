@@ -15,8 +15,6 @@
 package tcp
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-
 	"bufio"
 	"context"
 	"crypto/tls"
@@ -27,6 +25,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/linuskuehnle/ctraderopenapi/datatypes"
 )
 
 type TCPClient interface {
@@ -72,6 +72,7 @@ type tcpClient struct {
 
 	timeout time.Duration
 
+	reconnectBackoff datatypes.RetryBackoff
 	reconnectTimeout time.Duration
 	maxReconnects    int
 
@@ -87,11 +88,14 @@ func NewTCPClient(address string) TCPClient {
 }
 
 func newTCPClient(address string) *tcpClient {
+	backoff, _ := datatypes.NewRetryBackoff(DefaultReconnectBackoffLadder, DefaultReconnectBackoffStepDown)
+
 	return &tcpClient{
 		mu:      sync.RWMutex{},
 		address: address,
 		timeout: DefaultTimeout,
 
+		reconnectBackoff: backoff,
 		reconnectTimeout: DefaultReconnectTimeout,
 		maxReconnects:    DefaultMaxReconnects,
 	}
@@ -531,6 +535,8 @@ func (c *tcpClient) handleInputStream(ctx context.Context) {
 				}
 
 				// Fatal network connection error — connection is lost
+				c.reconnectBackoff.Backoff()
+
 				reconnectCh := make(chan struct{})
 				go c.execReconnectLoop(ctx, reconnectCh)
 
@@ -559,6 +565,14 @@ func (c *tcpClient) handleInputStream(ctx context.Context) {
 }
 
 func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan struct{}) {
+	defer close(reconnectedCh) // Ensure channel is always closed on all exit paths
+
+	permitted := c.reconnectBackoff.WaitForPermit(ctx)
+	if !permitted {
+		// Context canceled during backoff wait - clean shutdown
+		return
+	}
+
 	c.mu.Lock()
 
 	c.conn = nil
@@ -575,8 +589,6 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 
 	timer := time.NewTimer(0) // Immediate first attempt
 	defer timer.Stop()
-
-	defer close(reconnectedCh) // Ensure channel is always closed on all exit paths
 
 	for {
 		select {
