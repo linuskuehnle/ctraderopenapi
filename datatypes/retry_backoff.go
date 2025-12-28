@@ -86,16 +86,16 @@ func (b *retryBackoff) WaitForPermit(ctx context.Context) bool {
 	b.updateLadderStep()
 	b.updateGateTime()
 
-	sleepD := time.Until(b.gateTime)
+	gateTimeDiff := time.Until(b.gateTime)
 	b.mu.Unlock()
 
-	for sleepD > 0 {
+	for gateTimeDiff > 0 {
 		select {
 		case <-ctx.Done():
 			return false
-		case <-time.After(sleepD):
+		case <-time.After(gateTimeDiff):
 			b.mu.RLock()
-			sleepD = time.Until(b.gateTime)
+			gateTimeDiff = time.Until(b.gateTime)
 			b.mu.RUnlock()
 		}
 	}
@@ -136,6 +136,8 @@ func (b *retryBackoff) updateLadderStep() {
 
 func (b *retryBackoff) updateGateTime() {
 	if b.ladderStep == 0 {
+		// Pull gate time along for efficiency
+		b.gateTime = time.Now()
 		return
 	}
 
