@@ -79,8 +79,9 @@ func (m *accountManager[EventT, SubDataT]) LockModification(ctx context.Context)
 		return
 	}
 
-	m.modMu.Lock()
-	defer m.modMu.Unlock()
+	// Wait for any active modification lock before acquiring the write lock
+	m.waitForModificationUnlock()
+	defer m.mu.Unlock()
 
 	m.modLockCtx = ctx
 }
