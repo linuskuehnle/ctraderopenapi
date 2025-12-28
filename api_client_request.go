@@ -80,8 +80,36 @@ func (c *apiClient) LogoutAccount(ctid CtraderAccountId) (*ProtoOAAccountLogoutR
 }
 
 func (c *apiClient) RefreshAccessToken(expiredToken AccessToken, refreshToken RefreshToken) (*ProtoOARefreshTokenRes, error) {
-	// messages.ProtoOARefreshTokenReq
-	return nil, nil
+	req := messages.ProtoOARefreshTokenReq{
+		RefreshToken: proto.String(string(refreshToken)),
+	}
+	var res ProtoOARefreshTokenRes
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+
+	c.accManager.LockModification(ctx)
+
+	if !c.accManager.HasAccessToken(expiredToken) {
+		return nil, &AccessTokenDoesNotExistError{
+			AccessToken: expiredToken,
+		}
+	}
+
+	reqData := RequestData{
+		Ctx:     context.Background(),
+		ReqType: PROTO_OA_REFRESH_TOKEN_REQ,
+		Req:     &req,
+		ResType: PROTO_OA_REFRESH_TOKEN_RES,
+		Res:     &res,
+	}
+
+	if err := c.SendRequest(reqData); err != nil {
+		return nil, err
+	}
+
+	c.accManager.UpdateAccessToken(expiredToken, AccessToken(res.GetAccessToken()))
+	return &res, nil
 }
 
 func (c *apiClient) SendRequest(reqData RequestData) error {
