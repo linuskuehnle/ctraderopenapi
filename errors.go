@@ -164,6 +164,40 @@ type FunctionInvalidArgError = datatypes.FunctionInvalidArgError
 /*
 	/datatypes/account_manager.go
 */
+// AccessTokenAlreadyExistsError is an alias for `datatypes.AccessTokenAlreadyExistsError`.
+// It is returned by the account manager when attempting to add an access token
+// that is already registered.
+type AccessTokenAlreadyExistsError = datatypes.AccessTokenAlreadyExistsError
+
+// AccessTokenDoesNotExistError is an alias for `datatypes.AccessTokenDoesNotExistError`.
+// It is returned by the account manager when an operation references an
+// access token that is not registered with the manager.
+type AccessTokenDoesNotExistError = datatypes.AccessTokenDoesNotExistError
+
+// AccountIdAlreadyExistsError is an alias for `datatypes.AccountIdAlreadyExistsError`.
+// It is returned by the account manager when attempting to add an account ID that
+// is already registered under the given access token.
+type AccountIdAlreadyExistsError = datatypes.AccountIdAlreadyExistsError
+
+// AccountIdDoesNotExistError is an alias for `datatypes.AccountIdDoesNotExistError`.
+// It is returned by the account manager when an operation references an account ID
+// that is not registered with the manager.
+type AccountIdDoesNotExistError = datatypes.AccountIdDoesNotExistError
+
+// AccountIdDoesNotExistOnTokenError is an alias for `datatypes.AccountIdDoesNotExistOnTokenError`.
+// It is returned by the account manager when an operation references an account ID
+// that is not associated with the given access token.
+type AccountIdDoesNotExistOnTokenError = datatypes.AccountIdDoesNotExistOnTokenError
+
+// EventSubscriptionAlreadyExistsError is an alias for `datatypes.EventSubscriptionAlreadyExistsError`.
+// It is returned by the account manager when attempting to add an event subscription
+// that already exists for the given account and event type.
+type EventSubscriptionAlreadyExistsError[EventT comparable] = datatypes.EventSubscriptionAlreadyExistsError[EventT]
+
+// EventSubscriptionDoesNotExistError is an alias for `datatypes.EventSubscriptionDoesNotExistError`.
+// It is returned by the account manager when attempting to remove an event subscription
+// that does not exist for the given account and event type.
+type EventSubscriptionDoesNotExistError[EventT comparable] = datatypes.EventSubscriptionDoesNotExistError[EventT]
 
 /*
 	/datatypes/event_handler.go
