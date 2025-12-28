@@ -92,13 +92,22 @@ type APIClient interface {
 		api_client_request.go
 	*/
 
-	// TODO: document
+	// AuthenticateAccount authenticates the client with the specified cTrader account
+	// using the provided credentials. This must be called before making account-specific
+	// requests or subscribing to account events.
 	AuthenticateAccount(ctid CtraderAccountId, accessToken AccessToken) (*ProtoOAAccountAuthRes, error)
 
-	// TODO: document
+	// LogoutAccount logs out from the specified cTrader account.
+	// After a successful logout, the account will no longer receive events
+	// and any further requests for the account will fail until it is.
+	//
+	// Note: The confirmation of a successful logout is not this function returning,
+	// but when the server sends the corresponding ProtoOAAccountDisconnectEvent message.
 	LogoutAccount(ctid CtraderAccountId) (*ProtoOAAccountLogoutRes, error)
 
-	// TODO: document
+	// RefreshAccessToken refreshes an expired access token using the provided
+	// refresh token. Returns a new access token that can be used for subsequent
+	// authentication requests.
 	RefreshAccessToken(expiredToken AccessToken, refreshToken RefreshToken) (*ProtoOARefreshTokenRes, error)
 
 	// SendRequest sends a request to the server and waits for the response.
