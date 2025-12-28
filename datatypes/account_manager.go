@@ -21,6 +21,15 @@ import (
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package datatypes
+
+import (
+	"context"
+	"maps"
+	"slices"
+	"sync"
+)
+
 type AccountManager[EventT comparable, SubDataT any] interface {
 	LockModification(context.Context)
 
