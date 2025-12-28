@@ -127,18 +127,18 @@ type APIClient interface {
 	// server and return any transport or validation error. When the
 	// server starts sending matching events, they will be dispatched to
 	// the library's internal event clients and any registered listeners.
-	SubscribeAPIEvent(eventData SubscribableAPIEventData) error
+	SubscribeAPIEvent(eventData APIEventData) error
 
 	// UnsubscribeAPIEvent removes a previously created subscription. The
 	// `eventData` must match the original subscription parameters used
 	// to subscribe. This call sends the corresponding unsubscribe
 	// request to the server and returns any transport or validation error.
-	UnsubscribeAPIEvent(eventData SubscribableAPIEventData) error
+	UnsubscribeAPIEvent(eventData APIEventData) error
 
 	// ListenToAPIEvent registers a long-running listener for listenable
 	// events (server-initiated push events).
 	// `eventType` selects which event to listen for.
-	// `onEventCh` receives a `ListenableEvent`.
+	// `onEventCh` receives a `APIEvent`.
 	// `ctx` controls the lifetime of the listener: when `ctx` is canceled the
 	// listener is removed. If `ctx` is nil, the listener will not be canceled
 	// until the client is disconnected.
@@ -170,13 +170,13 @@ type APIClient interface {
 	//
 	// To register a typed callback without writing a manual wrapper, use
 	// `SpawnAPIEventHandler` which starts a small goroutine that adapts the
-	// generic `ListenableEvent` channel to a typed client. Example:
+	// generic `APIEvent` channel to a typed client. Example:
 	//
 	//   onSpot := func(e *ProtoOASpotEvent) { fmt.Println(e) }
-	//   onEventCh := make(chan ListenableEvent)
+	//   onEventCh := make(chan APIEvent)
 	//   if err := h.ListenToAPIEvent(ctx, EventType_Spots, onEventCh); err != nil { /* ... */ }
 	//   if err := SpawnAPIEventHandler(ctx, onEventCh, onSpot); err != nil { /* ... */ }
-	ListenToAPIEvent(ctx context.Context, eventType eventType, onEventCh chan ListenableEvent) error
+	ListenToAPIEvent(ctx context.Context, eventType eventType, onEventCh chan APIEvent) error
 
 	// ListenToClientEvent registers a long-running listener for listenable
 	// api client events (connection loss / reconnect success / reconnect fail).
@@ -207,10 +207,10 @@ type APIClient interface {
 	// generic `ListenToClientEvent` channel to a typed client. Example:
 	//
 	//   onConnLoss := func(e *ConnectionLossEvent) { fmt.Println(e) }
-	//   onEventCh := make(chan ListenableClientEvent)
+	//   onEventCh := make(chan ClientEvent)
 	//   if err := h.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, onEventCh); err != nil { /* ... */ }
 	//   if err := SpawnClientEventHandler(ctx, onEventCh, onConnLoss); err != nil { /* ... */ }
-	ListenToClientEvent(ctx context.Context, clientEventType clientEventType, onEventCh chan ListenableClientEvent) error
+	ListenToClientEvent(ctx context.Context, clientEventType clientEventType, onEventCh chan ClientEvent) error
 }
 
 type apiClient struct {
@@ -226,7 +226,7 @@ type apiClient struct {
 	accManager    datatypes.AccountManager[eventType, SubscriptionData]
 
 	apiEventHandler    datatypes.EventHandler[proto.Message]
-	clientEventHandler datatypes.EventHandler[ListenableClientEvent]
+	clientEventHandler datatypes.EventHandler[ClientEvent]
 
 	cred ApplicationCredentials
 
@@ -265,7 +265,7 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		accManager:    datatypes.NewAccountManager[eventType, SubscriptionData](),
 
 		apiEventHandler:    datatypes.NewEventHandler[proto.Message](),
-		clientEventHandler: datatypes.NewEventHandler[ListenableClientEvent](),
+		clientEventHandler: datatypes.NewEventHandler[ClientEvent](),
 
 		cred: cred,
 

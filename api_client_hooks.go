@@ -99,8 +99,8 @@ func (c *apiClient) onTCPMessage(msgBytes []byte) {
 		return
 	default:
 		msgOAPayloadType := ProtoOAPayloadType(msgPayloadType)
-		if isListenableEvent[msgOAPayloadType] {
-			if err := c.handleListenableAPIEvent(msgOAPayloadType, &protoMsg); err != nil {
+		if isAPIEvent[msgOAPayloadType] {
+			if err := c.handleAPIEvent(msgOAPayloadType, &protoMsg); err != nil {
 				c.fatalErrCh <- err
 			}
 			return

@@ -171,7 +171,7 @@ func TestListenToFatalError(t *testing.T) {
 
 	errCh := make(chan error)
 
-	fatalErrCh := make(chan ListenableClientEvent)
+	fatalErrCh := make(chan ClientEvent)
 	onFatalErr := func(e *FatalErrorEvent) {
 		fatalErr := e.Err
 		if fatalErr.Error() != "test fatal error" {
@@ -193,7 +193,7 @@ func TestListenToFatalError(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	recSuccCh := make(chan ListenableClientEvent)
+	recSuccCh := make(chan ClientEvent)
 	onRecSucc := func(e *ReconnectSuccessEvent) {
 		onceRecSucc.Do(func() {
 			wg.Done()
@@ -316,9 +316,9 @@ func TestReconnect(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	onConnLossCh := make(chan ListenableClientEvent)
-	onReconnectSuccessCh := make(chan ListenableClientEvent)
-	onReconnectFailCh := make(chan ListenableClientEvent)
+	onConnLossCh := make(chan ClientEvent)
+	onReconnectSuccessCh := make(chan ClientEvent)
+	onReconnectFailCh := make(chan ClientEvent)
 
 	onConnectionLoss := func(e *ConnectionLossEvent) {
 		once1.Do(func() {
@@ -463,7 +463,7 @@ func TestBatchRequestSendOnConnLoss(t *testing.T) {
 	wg.Add(numRequests)
 	var reqErrs []error = make([]error, numRequests)
 
-	connLossCh := make(chan ListenableClientEvent)
+	connLossCh := make(chan ClientEvent)
 	onConnLoss := func(e *ConnectionLossEvent) {
 		for i := range numRequests {
 			go func() {
@@ -538,7 +538,7 @@ func TestPreElectReqCtxCancel(t *testing.T) {
 	// request emission time (200ms due to rate limiter)
 	errCh := make(chan error)
 
-	connLossCh := make(chan ListenableClientEvent)
+	connLossCh := make(chan ClientEvent)
 	onConnLoss := func(e *ConnectionLossEvent) {
 		req := ProtoOAVersionReq{
 			PayloadType: PROTO_OA_VERSION_REQ.Enum(),

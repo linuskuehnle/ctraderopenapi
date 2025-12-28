@@ -154,7 +154,7 @@ var resTypeByReqType = map[ProtoOAPayloadType]ProtoOAPayloadType{
 	PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ:  PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES,
 }
 
-var isListenableEvent = map[ProtoOAPayloadType]bool{
+var isAPIEvent = map[ProtoOAPayloadType]bool{
 	PROTO_OA_SPOT_EVENT:                       true,
 	PROTO_OA_DEPTH_EVENT:                      true,
 	PROTO_OA_TRAILING_SL_CHANGED_EVENT:        true,

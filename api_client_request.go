@@ -356,8 +356,8 @@ func (c *apiClient) resubscribeActiveSubs() error {
 func (c *apiClient) resubscribeAccountSubs(ctid CtraderAccountId) error {
 	// Filter out live trendbar events as they have to be subscribed after
 	// successful spot event subscription.
-	liveTrendbarEventData := []SubscribableAPIEventData{}
-	otherEventData := []SubscribableAPIEventData{}
+	liveTrendbarEventData := []APIEventData{}
+	otherEventData := []APIEventData{}
 
 	currentSubs, err := c.accManager.GetEventSubscriptionsOfAccountId(ctid)
 	if err != nil {
@@ -365,7 +365,7 @@ func (c *apiClient) resubscribeAccountSubs(ctid CtraderAccountId) error {
 	}
 
 	for t, s := range currentSubs {
-		d := SubscribableAPIEventData{
+		d := APIEventData{
 			EventType:       t,
 			SubcriptionData: s,
 		}
@@ -377,7 +377,7 @@ func (c *apiClient) resubscribeAccountSubs(ctid CtraderAccountId) error {
 		}
 	}
 
-	resubscribeBatch := func(eventDataBatch []SubscribableAPIEventData) error {
+	resubscribeBatch := func(eventDataBatch []APIEventData) error {
 		// Resubscribe current sessions active subscriptions
 		wg := sync.WaitGroup{}
 		errCh := make(chan error, len(eventDataBatch))

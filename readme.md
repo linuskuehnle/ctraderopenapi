@@ -64,13 +64,13 @@ full comments and examples):
 	- `Connect() error` / `Disconnect()`
 	- `SendRequest(RequestData) error` — sends a protobuf-typed request and
 		unmarshals the response into the provided response object.
-	- `SubscribeAPIEvent(SubscribableAPIEventData)` / `UnsubscribeAPIEvent(...)` —
+	- `SubscribeAPIEvent(APIEventData)` / `UnsubscribeAPIEvent(...)` —
 		subscribe/unsubscribe for server-side subscription-based events.
 	- `SubscribeClientEvent(SubscribableClientEventData)` / `UnsubscribeClientEvent(...)` —
 		subscribe/unsubscribe for client-side events.
-	- `ListenToAPIEvent(ctx, eventType, chan ListenableAPIEvent)` — register a
+	- `ListenToAPIEvent(ctx, eventType, chan APIEvent)` — register a
 		long-running listener channel for push events.
-	- `ListenToClientEvent(ctx, clientEventType, chan ListenableClientEvent)`
+	- `ListenToClientEvent(ctx, clientEventType, chan ClientEvent)`
 		— listen for client-side events
 	
 	Client-side events are e.g. fatal client errors, connection loss, reconnect success
@@ -106,7 +106,7 @@ full comments and examples):
 	authenticate to the OpenAPI. Validate with `CheckError()`.
 
 - Event adapters & helpers:
-	- `ListenableEvent` and `ListenableClientEvent` are marker interfaces.
+	- `APIEvent` and `ClientEvent` are marker interfaces.
 	- `CastToEventType[T]` and `CastToClientEventType[T]` helpers to cast the generic event type
 		to the concrete event types.
 	- `SpawnAPIEventHandler` and `SpawnClientEventHandler` start small goroutines that forward
@@ -161,7 +161,7 @@ func main() {
 ctx, cancel := context.WithCancel(context.Background())
 defer cancel()
 
-onEventCh := make(chan ctraderopenapi.ListenableEvent)
+onEventCh := make(chan ctraderopenapi.APIEvent)
 if err := client.ListenToAPIEvent(ctx, ctraderopenapi.APIEventType_Spots, onEventCh); err != nil {
 	panic(err)
 }
@@ -170,9 +170,9 @@ _ = ctraderopenapi.SpawnAPIEventHandler(ctx, onEventCh, func(e *ctraderopenapi.P
 	fmt.Println("spot event:", e)
 })
 
-sub := ctraderopenapi.SubscribableAPIEventData{
+sub := ctraderopenapi.APIEventData{
 	EventType: ctraderopenapi.EventType_Spots,
-	SubcriptionData: &ctraderopenapi.SubscriptionDataSpotEvent{
+	SubcriptionData: &ctraderopenapi.SpotEventData{
 		CtraderAccountId: ctraderopenapi.CtraderAccountId(123456),
 		SymbolIds:        []int64{1, 2, 3},
 	},
@@ -186,7 +186,7 @@ if err := client.SubscribeAPIEvent(sub); err != nil {
 
 ```go
 
-clientCh := make(chan ctraderopenapi.ListenableClientEvent)
+clientCh := make(chan ctraderopenapi.ClientEvent)
 if err := client.ListenToClientEvent(context.Background(), ctraderopenapi.ClientEventType_ReconnectSuccessEvent, clientCh); err != nil {
 	panic(err)
 }

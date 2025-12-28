@@ -30,7 +30,7 @@ Pass through functions
 */
 /**/
 
-func (c *apiClient) SubscribeAPIEvent(eventData SubscribableAPIEventData) error {
+func (c *apiClient) SubscribeAPIEvent(eventData APIEventData) error {
 	ctid, err := c.subscribeAPIEvent(eventData, false)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func (c *apiClient) SubscribeAPIEvent(eventData SubscribableAPIEventData) error 
 	return c.accManager.AddEventSubscription(ctid, eventData.EventType, eventData.SubcriptionData)
 }
 
-func (c *apiClient) subscribeAPIEvent(eventData SubscribableAPIEventData, bypassReconnectBlock bool) (CtraderAccountId, error) {
+func (c *apiClient) subscribeAPIEvent(eventData APIEventData, bypassReconnectBlock bool) (CtraderAccountId, error) {
 	var ctid CtraderAccountId
 
 	if eventData.SubcriptionData == nil {
@@ -56,7 +56,7 @@ func (c *apiClient) subscribeAPIEvent(eventData SubscribableAPIEventData, bypass
 
 	switch eventData.EventType {
 	case APIEventType_Spots:
-		subData, ok := eventData.SubcriptionData.(*SubscriptionDataSpotEvent)
+		subData, ok := eventData.SubcriptionData.(*SpotEventData)
 		if !ok {
 			return ctid, &FunctionInvalidArgError{
 				FunctionName: "SubscribeToEvent",
@@ -75,7 +75,7 @@ func (c *apiClient) subscribeAPIEvent(eventData SubscribableAPIEventData, bypass
 			Res:     &messages.ProtoOASubscribeSpotsRes{},
 		}
 	case APIEventType_LiveTrendbars:
-		subData, ok := eventData.SubcriptionData.(*SubscriptionDataLiveTrendbarEvent)
+		subData, ok := eventData.SubcriptionData.(*LiveTrendbarEventData)
 		if !ok {
 			return ctid, &FunctionInvalidArgError{
 				FunctionName: "SubscribeToEvent",
@@ -95,7 +95,7 @@ func (c *apiClient) subscribeAPIEvent(eventData SubscribableAPIEventData, bypass
 			Res:     &messages.ProtoOASubscribeLiveTrendbarRes{},
 		}
 	case APIEventType_DepthQuotes:
-		subData, ok := eventData.SubcriptionData.(*SubscriptionDataDepthQuoteEvent)
+		subData, ok := eventData.SubcriptionData.(*DepthQuoteEventData)
 		if !ok {
 			return ctid, &FunctionInvalidArgError{
 				FunctionName: "SubscribeToEvent",
@@ -127,7 +127,7 @@ func (c *apiClient) subscribeAPIEvent(eventData SubscribableAPIEventData, bypass
 	return ctid, c.sendRequest(reqData)
 }
 
-func (c *apiClient) UnsubscribeAPIEvent(eventData SubscribableAPIEventData) error {
+func (c *apiClient) UnsubscribeAPIEvent(eventData APIEventData) error {
 	ctid, err := c.unsubscribeAPIEvent(eventData, false)
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func (c *apiClient) UnsubscribeAPIEvent(eventData SubscribableAPIEventData) erro
 	return nil
 }
 
-func (c *apiClient) unsubscribeAPIEvent(eventData SubscribableAPIEventData, bypassReconnectBlock bool) (CtraderAccountId, error) {
+func (c *apiClient) unsubscribeAPIEvent(eventData APIEventData, bypassReconnectBlock bool) (CtraderAccountId, error) {
 	var ctid CtraderAccountId
 
 	if eventData.SubcriptionData == nil {
@@ -154,7 +154,7 @@ func (c *apiClient) unsubscribeAPIEvent(eventData SubscribableAPIEventData, bypa
 
 	switch eventData.EventType {
 	case APIEventType_Spots:
-		subData, ok := eventData.SubcriptionData.(*SubscriptionDataSpotEvent)
+		subData, ok := eventData.SubcriptionData.(*SpotEventData)
 		if !ok {
 			return ctid, &FunctionInvalidArgError{
 				FunctionName: "SubscribeToEvent",
@@ -173,7 +173,7 @@ func (c *apiClient) unsubscribeAPIEvent(eventData SubscribableAPIEventData, bypa
 			Res:     &messages.ProtoOAUnsubscribeSpotsRes{},
 		}
 	case APIEventType_LiveTrendbars:
-		subData, ok := eventData.SubcriptionData.(*SubscriptionDataLiveTrendbarEvent)
+		subData, ok := eventData.SubcriptionData.(*LiveTrendbarEventData)
 		if !ok {
 			return ctid, &FunctionInvalidArgError{
 				FunctionName: "SubscribeToEvent",
@@ -193,7 +193,7 @@ func (c *apiClient) unsubscribeAPIEvent(eventData SubscribableAPIEventData, bypa
 			Res:     &messages.ProtoOAUnsubscribeLiveTrendbarRes{},
 		}
 	case APIEventType_DepthQuotes:
-		subData, ok := eventData.SubcriptionData.(*SubscriptionDataDepthQuoteEvent)
+		subData, ok := eventData.SubcriptionData.(*DepthQuoteEventData)
 		if !ok {
 			return ctid, &FunctionInvalidArgError{
 				FunctionName: "SubscribeToEvent",
@@ -225,7 +225,7 @@ func (c *apiClient) unsubscribeAPIEvent(eventData SubscribableAPIEventData, bypa
 	return ctid, c.sendRequest(reqData)
 }
 
-func (c *apiClient) ListenToAPIEvent(ctx context.Context, eventType eventType, onEventCh chan ListenableEvent) error {
+func (c *apiClient) ListenToAPIEvent(ctx context.Context, eventType eventType, onEventCh chan APIEvent) error {
 	if onEventCh == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "ListenToAPIEvent",
@@ -340,7 +340,7 @@ func (c *apiClient) ListenToAPIEvent(ctx context.Context, eventType eventType, o
 	return nil
 }
 
-func (c *apiClient) ListenToClientEvent(ctx context.Context, clientEventType clientEventType, onEventCh chan ListenableClientEvent) error {
+func (c *apiClient) ListenToClientEvent(ctx context.Context, clientEventType clientEventType, onEventCh chan ClientEvent) error {
 	if onEventCh == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "ListenToClientEvent",
@@ -352,7 +352,7 @@ func (c *apiClient) ListenToClientEvent(ctx context.Context, clientEventType cli
 	}
 
 	eventId := datatypes.EventId(clientEventType)
-	eventCallback := func(event ListenableClientEvent) {
+	eventCallback := func(event ClientEvent) {
 		onEventCh <- event
 	}
 
@@ -394,8 +394,8 @@ func (c *apiClient) runListenerRemove(listenerCtx context.Context, removeCallbac
 	removeCallback()
 }
 
-// handleListenableEvent is called on an incoming event message that is listenable
-func (c *apiClient) handleListenableAPIEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
+// handleAPIEvent is called on an incoming event message that is listenable
+func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
 	var eventId datatypes.EventId = datatypes.EventId(msgType)
 	if !c.apiEventHandler.HasEvent(eventId) {
 		// No listener for this event, ignore
@@ -579,7 +579,7 @@ func (c *apiClient) handleListenableAPIEvent(msgType ProtoOAPayloadType, protoMs
 	return nil
 }
 
-// SpawnAPIEventHandler starts a simple goroutine that reads `ListenableEvent`
+// SpawnAPIEventHandler starts a simple goroutine that reads `APIEvent`
 // values from `onEventCh`, attempts to cast each value to the concrete
 // type `T` and invokes `onEvent` for matching values.
 //
@@ -594,7 +594,7 @@ func (c *apiClient) handleListenableAPIEvent(msgType ProtoOAPayloadType, protoMs
 //     close it while other readers expect it to remain open.
 //   - The helper does not recover from panics in `onEvent`; if the typed
 //     handler may panic wrap it appropriately.
-func SpawnAPIEventHandler[T ListenableEvent](ctx context.Context, onEventCh chan ListenableEvent, onEvent func(T)) error {
+func SpawnAPIEventHandler[T APIEvent](ctx context.Context, onEventCh chan APIEvent, onEvent func(T)) error {
 	if ctx == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "SpawnAPIEventHandler",
@@ -625,7 +625,7 @@ func SpawnAPIEventHandler[T ListenableEvent](ctx context.Context, onEventCh chan
 	return nil
 }
 
-// SpawnClientEventHandler starts a simple goroutine that reads `ListenableClientEvent`
+// SpawnClientEventHandler starts a simple goroutine that reads `ClientEvent`
 // values from `onEventCh`, attempts to cast each value to the concrete
 // type `T` and invokes `onEvent` for matching values.
 //
@@ -640,7 +640,7 @@ func SpawnAPIEventHandler[T ListenableEvent](ctx context.Context, onEventCh chan
 //     close it while other readers expect it to remain open.
 //   - The helper does not recover from panics in `onEvent`; if the typed
 //     handler may panic wrap it appropriately.
-func SpawnClientEventHandler[T ListenableClientEvent](ctx context.Context, onEventCh chan ListenableClientEvent, onEvent func(T)) error {
+func SpawnClientEventHandler[T ClientEvent](ctx context.Context, onEventCh chan ClientEvent, onEvent func(T)) error {
 	if ctx == nil {
 		return &FunctionInvalidArgError{
 			FunctionName: "SpawnClientEventHandler",

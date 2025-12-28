@@ -5,35 +5,35 @@ Subscribable event assertions
 */
 /**/
 
-func (*ProtoOASpotEvent) IsSubscribableEvent() {}
-func (*ProtoOASpotEvent) IsListenableEvent()   {}
+func (*ProtoOASpotEvent) IsSubscribableEvent()  {}
+func (*ProtoOASpotEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOADepthEvent) IsSubscribableEvent() {}
-func (*ProtoOADepthEvent) IsListenableEvent()   {}
+func (*ProtoOADepthEvent) IsSubscribableEvent()  {}
+func (*ProtoOADepthEvent) IsListenableAPIEvent() {}
 
 /*
 Listenable event assertions
 */
 /**/
 
-func (*ProtoOATrailingSLChangedEvent) IsListenableEvent() {}
+func (*ProtoOATrailingSLChangedEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOASymbolChangedEvent) IsListenableEvent() {}
+func (*ProtoOASymbolChangedEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOATraderUpdatedEvent) IsListenableEvent() {}
+func (*ProtoOATraderUpdatedEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAExecutionEvent) IsListenableEvent() {}
+func (*ProtoOAExecutionEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAOrderErrorEvent) IsListenableEvent() {}
+func (*ProtoOAOrderErrorEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAMarginChangedEvent) IsListenableEvent() {}
+func (*ProtoOAMarginChangedEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAAccountsTokenInvalidatedEvent) IsListenableEvent() {}
+func (*ProtoOAAccountsTokenInvalidatedEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAClientDisconnectEvent) IsListenableEvent() {}
+func (*ProtoOAClientDisconnectEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAAccountDisconnectEvent) IsListenableEvent() {}
+func (*ProtoOAAccountDisconnectEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAMarginCallUpdateEvent) IsListenableEvent() {}
+func (*ProtoOAMarginCallUpdateEvent) IsListenableAPIEvent() {}
 
-func (*ProtoOAMarginCallTriggerEvent) IsListenableEvent() {}
+func (*ProtoOAMarginCallTriggerEvent) IsListenableAPIEvent() {}

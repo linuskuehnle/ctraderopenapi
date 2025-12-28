@@ -108,42 +108,43 @@ type eventType = datatypes.EventId
 type apiEventType = eventType
 type clientEventType = eventType
 
-// ListenableEvent marks protobuf message types that can be listened to
-// (push-style events). Implemented by generated protobuf message types
-// in the `messages` package with a zero-sized method.
+// APIEvent marks protobuf message types that can be listened to
+// (push-style events).
 //
 // These event types are delivered by the server independently from any
 // single client's request; users can register callbacks using
-// `ListenToAPIEvent` which will receive a `ListenableEvent` value when a
+// `ListenToAPIEvent` which will receive a `APIEvent` value when a
 // matching event occurs.
-type ListenableEvent interface {
-	IsListenableEvent()
+type APIEvent interface {
+	IsListenableAPIEvent()
 }
 
-type ListenableClientEvent interface {
+// ClientEvent marks events emitted by the API client itself
+// (for example connection loss, reconnect success, etc).
+type ClientEvent interface {
 	IsListenableClientEvent()
 }
 
-// CastToEventType attempts to cast a generic `ListenableEvent` to the
+// CastToEventType attempts to cast a generic `APIEvent` to the
 // concrete typed event `T`. It returns the typed value and `true` if the
 // assertion succeeded; otherwise it returns the zero value and `false`.
 //
 // This helper is commonly used by small adapter goroutines that accept a
-// generic `ListenableEvent` channel but want to call a typed handler
-// (for example converting `ListenableEvent` to `*ProtoOASpotEvent`).
-func CastToEventType[T ListenableEvent](event ListenableEvent) (T, bool) {
+// generic `APIEvent` channel but want to call a typed handler
+// (for example converting `APIEvent` to `*ProtoOASpotEvent`).
+func CastToEventType[T APIEvent](event APIEvent) (T, bool) {
 	t, ok := event.(T)
 	return t, ok
 }
 
-// CastToClientEventType attempts to cast a generic `ListenableClientEvent` to the
+// CastToClientEventType attempts to cast a generic `ClientEvent` to the
 // concrete typed event `T`. It returns the typed value and `true` if the
 // assertion succeeded; otherwise it returns the zero value and `false`.
 //
 // This helper is commonly used by small adapter goroutines that accept a
-// generic `ListenableClientEvent` channel but want to call a typed handler
-// (for example converting `ListenableClientEvent` to `*ReconnectSuccessEvent`).
-func CastToClientEventType[T ListenableClientEvent](event ListenableClientEvent) (T, bool) {
+// generic `ClientEvent` channel but want to call a typed handler
+// (for example converting `ClientEvent` to `*ReconnectSuccessEvent`).
+func CastToClientEventType[T ClientEvent](event ClientEvent) (T, bool) {
 	t, ok := event.(T)
 	return t, ok
 }
@@ -158,14 +159,14 @@ type SubscriptionData interface {
 	CheckError() error
 }
 
-// SubscribableAPIEventData groups the event type and subscription-specific
+// APIEventData groups the event type and subscription-specific
 // data for `SubscribeAPIEvent` and `UnsubscribeAPIEvent` calls.
 //
 //   - EventType selects which server-side event to subscribe/unsubscribe.
 //   - SubcriptionData is a concrete struct implementing `SubscriptionData`
 //     that provides the required parameters for that event (for example,
 //     account id and symbol ids for Spot events).
-type SubscribableAPIEventData struct {
+type APIEventData struct {
 	EventType       apiEventType
 	SubcriptionData SubscriptionData
 }
@@ -176,13 +177,13 @@ type SubscribableAPIEventData struct {
 /**/
 
 // Subscription data for the Spot Event (ProtoOASpotEvent).
-type SubscriptionDataSpotEvent struct {
+type SpotEventData struct {
 	CtraderAccountId CtraderAccountId
 	SymbolIds        []int64
 }
 
 // CheckError checks if the provided subscription data is valid. Returns an error if it is invalid.
-func (d *SubscriptionDataSpotEvent) CheckError() error {
+func (d *SpotEventData) CheckError() error {
 	if err := d.CtraderAccountId.CheckError(); err != nil {
 		return fmt.Errorf("field CtraderAccountId invalid: %w", err)
 	}
@@ -195,14 +196,14 @@ func (d *SubscriptionDataSpotEvent) CheckError() error {
 }
 
 // Subscription data for the Live Trendbars Event.
-type SubscriptionDataLiveTrendbarEvent struct {
+type LiveTrendbarEventData struct {
 	CtraderAccountId CtraderAccountId
 	SymbolId         int64
 	Period           ProtoOATrendbarPeriod
 }
 
 // CheckError checks if the provided subscription data is valid. Returns an error if it is invalid.
-func (d *SubscriptionDataLiveTrendbarEvent) CheckError() error {
+func (d *LiveTrendbarEventData) CheckError() error {
 	if err := d.CtraderAccountId.CheckError(); err != nil {
 		return fmt.Errorf("field CtraderAccountId invalid: %w", err)
 	}
@@ -218,13 +219,13 @@ func (d *SubscriptionDataLiveTrendbarEvent) CheckError() error {
 }
 
 // Subscription data for the Depth Quote Event (ProtoOADepthEvent).
-type SubscriptionDataDepthQuoteEvent struct {
+type DepthQuoteEventData struct {
 	CtraderAccountId CtraderAccountId
 	SymbolIds        []int64
 }
 
 // CheckError checks if the provided subscription data is valid. Returns an error if it is invalid.
-func (d *SubscriptionDataDepthQuoteEvent) CheckError() error {
+func (d *DepthQuoteEventData) CheckError() error {
 	if err := d.CtraderAccountId.CheckError(); err != nil {
 		return fmt.Errorf("field CtraderAccountId invalid: %w", err)
 	}
