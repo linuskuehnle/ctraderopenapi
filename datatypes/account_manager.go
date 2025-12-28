@@ -127,7 +127,7 @@ func (m *accountManager[EventT, SubDataT]) RemoveAccessToken(token AccessToken) 
 
 	accountIds, exists := m.accountIdsByAccessToken[token]
 	if !exists {
-		return &AccessTokenDoesNotExist{AccessToken: token}
+		return &AccessTokenDoesNotExistError{AccessToken: token}
 	}
 
 	// Remove all accounts associated with this token
@@ -148,7 +148,7 @@ func (m *accountManager[EventT, SubDataT]) UpdateAccessToken(old, new AccessToke
 	// Check if old token exists
 	accountIds, exists := m.accountIdsByAccessToken[old]
 	if !exists {
-		return &AccessTokenDoesNotExist{AccessToken: old}
+		return &AccessTokenDoesNotExistError{AccessToken: old}
 	}
 
 	// Check if new token already exists
@@ -176,7 +176,7 @@ func (m *accountManager[EventT, SubDataT]) AddAccountId(token AccessToken, accou
 	// Check if token exists
 	accountIds, exists := m.accountIdsByAccessToken[token]
 	if !exists {
-		return &AccessTokenDoesNotExist{AccessToken: token}
+		return &AccessTokenDoesNotExistError{AccessToken: token}
 	}
 
 	// Check if account already exists
@@ -198,13 +198,13 @@ func (m *accountManager[EventT, SubDataT]) RemoveAccountId(accountId CtraderAcco
 
 	token, exists := m.accessTokenByAccountId[accountId]
 	if !exists {
-		return &AccountIdDoesNotExist{AccountId: accountId}
+		return &AccountIdDoesNotExistError{AccountId: accountId}
 	}
 
 	// Check if token exists
 	accountIds, exists := m.accountIdsByAccessToken[token]
 	if !exists {
-		return &AccessTokenDoesNotExist{AccessToken: token}
+		return &AccessTokenDoesNotExistError{AccessToken: token}
 	}
 
 	// Find and remove the account
@@ -218,7 +218,7 @@ func (m *accountManager[EventT, SubDataT]) RemoveAccountId(accountId CtraderAcco
 
 	if foundIndex == -1 {
 		// Should never happen actually
-		return &AccountIdDoesNotExistOnToken{AccountId: accountId, AccessToken: token}
+		return &AccountIdDoesNotExistOnTokenError{AccountId: accountId, AccessToken: token}
 	}
 
 	// Remove from accountIds slice
@@ -239,7 +239,7 @@ func (m *accountManager[EventT, SubDataT]) AddEventSubscription(accountId Ctrade
 	// Check if account exists
 	subs, exists := m.subscriptionsByAccount[accountId]
 	if !exists {
-		return &AccountIdDoesNotExist{AccountId: accountId}
+		return &AccountIdDoesNotExistError{AccountId: accountId}
 	}
 
 	// Check if subscription already exists
@@ -260,12 +260,12 @@ func (m *accountManager[EventT, SubDataT]) RemoveEventSubscription(accountId Ctr
 	// Check if account exists
 	subs, exists := m.subscriptionsByAccount[accountId]
 	if !exists {
-		return &AccountIdDoesNotExist{AccountId: accountId}
+		return &AccountIdDoesNotExistError{AccountId: accountId}
 	}
 
 	// Check if subscription exists
 	if _, exists := subs[event]; !exists {
-		return &EventSubscriptionNotExistingError[EventT]{EventType: event, AccountId: accountId}
+		return &EventSubscriptionDoesNotExistError[EventT]{EventType: event, AccountId: accountId}
 	}
 
 	delete(subs, event)
@@ -301,7 +301,7 @@ func (m *accountManager[EventT, SubDataT]) GetAccountIdsOfAccessToken(token Acce
 	// Check if token exists
 	accountIds, exists := m.accountIdsByAccessToken[token]
 	if !exists {
-		return nil, &AccessTokenDoesNotExist{AccessToken: token}
+		return nil, &AccessTokenDoesNotExistError{AccessToken: token}
 	}
 
 	// Return a copy of the accountIds slice
@@ -317,7 +317,7 @@ func (m *accountManager[EventT, SubDataT]) GetEventSubscriptionsOfAccountId(acco
 	// Check if account exists
 	subs, exists := m.subscriptionsByAccount[accountId]
 	if !exists {
-		return nil, &AccountIdDoesNotExist{AccountId: accountId}
+		return nil, &AccountIdDoesNotExistError{AccountId: accountId}
 	}
 
 	// Return a copy of the subscriptions map

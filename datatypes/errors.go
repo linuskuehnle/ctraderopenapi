@@ -39,11 +39,11 @@ func (e *AccessTokenAlreadyExistsError) Error() string {
 	return fmt.Sprintf("access token %s already exists on account manager", e.AccessToken)
 }
 
-type AccessTokenDoesNotExist struct {
+type AccessTokenDoesNotExistError struct {
 	AccessToken AccessToken
 }
 
-func (e *AccessTokenDoesNotExist) Error() string {
+func (e *AccessTokenDoesNotExistError) Error() string {
 	return fmt.Sprintf("access token %s does not exist on account manager", e.AccessToken)
 }
 
@@ -56,20 +56,20 @@ func (e *AccountIdAlreadyExistsError) Error() string {
 	return fmt.Sprintf("account id %d on access token %s already exists on account manager", e.AccountId, e.AccessToken)
 }
 
-type AccountIdDoesNotExist struct {
+type AccountIdDoesNotExistError struct {
 	AccountId CtraderAccountId
 }
 
-func (e *AccountIdDoesNotExist) Error() string {
+func (e *AccountIdDoesNotExistError) Error() string {
 	return fmt.Sprintf("account id %d does not exist on account manager", e.AccountId)
 }
 
-type AccountIdDoesNotExistOnToken struct {
+type AccountIdDoesNotExistOnTokenError struct {
 	AccountId   CtraderAccountId
 	AccessToken AccessToken
 }
 
-func (e *AccountIdDoesNotExistOnToken) Error() string {
+func (e *AccountIdDoesNotExistOnTokenError) Error() string {
 	return fmt.Sprintf("account id %d does not exist on token %s on account manager", e.AccountId, e.AccessToken)
 }
 
@@ -82,12 +82,12 @@ func (e *EventSubscriptionAlreadyExistsError[EventT]) Error() string {
 	return fmt.Sprintf("event type %v on account id %d already exists on account manager", e.EventType, e.AccountId)
 }
 
-type EventSubscriptionNotExistingError[EventT comparable] struct {
+type EventSubscriptionDoesNotExistError[EventT comparable] struct {
 	EventType EventT
 	AccountId CtraderAccountId
 }
 
-func (e *EventSubscriptionNotExistingError[EventT]) Error() string {
+func (e *EventSubscriptionDoesNotExistError[EventT]) Error() string {
 	return fmt.Sprintf("event type %v on account id %d does not exist on account manager", e.EventType, e.AccountId)
 }
 
