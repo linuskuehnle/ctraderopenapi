@@ -1,3 +1,17 @@
+// Copyright 2025 Linus Kühnle
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package ctraderopenapi
 
 import (
@@ -160,6 +174,8 @@ func (c *apiClient) onFatalError(err error) {
 func (c *apiClient) onConnectionLoss() {
 	c.lifecycleData.SetClientDisconnected()
 
+	c.accManager.ClearAccDisconnectConfirms()
+
 	event := &ConnectionLossEvent{}
 	c.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ConnectionLossEvent), event)
 }
@@ -167,7 +183,7 @@ func (c *apiClient) onConnectionLoss() {
 func (c *apiClient) onReconnectSuccess() {
 	jobErrCh := make(chan error)
 
-	go func() {
+	go func(jobErrCh chan error) {
 		if err := c.authenticateApp(); err != nil {
 			jobErrCh <- err
 			close(jobErrCh)
@@ -192,9 +208,9 @@ func (c *apiClient) onReconnectSuccess() {
 		}
 
 		close(jobErrCh)
-	}()
+	}(jobErrCh)
 
-	go func() {
+	go func(jobErrCh chan error) {
 		jobErr, ok := <-jobErrCh
 		if ok {
 			// Error occured in authenticateApp, reloginActiveAccounts or resubscribeActiveSubs task.
@@ -212,7 +228,7 @@ func (c *apiClient) onReconnectSuccess() {
 		c.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectSuccessEvent), event)
 
 		c.lifecycleData.SetClientConnected()
-	}()
+	}(jobErrCh)
 }
 
 func (c *apiClient) onReconnectFail(err error) {
@@ -220,4 +236,8 @@ func (c *apiClient) onReconnectFail(err error) {
 		Err: err,
 	}
 	c.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectFailEvent), event)
+}
+
+func (c *apiClient) onAccountDisconnect(ctid CtraderAccountId) {
+	c.accManager.ConfirmAccDisconnect(ctid)
 }
