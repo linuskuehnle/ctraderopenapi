@@ -267,6 +267,11 @@ func TestAccountAuth(t *testing.T) {
 	if res.GetCtidTraderAccountId() != accountId {
 		t.Fatalf("expected account ID %d, got %d", accountId, res.GetCtidTraderAccountId())
 	}
+
+	// Test account disconnect confirm
+	if _, err = c.LogoutAccount(CtraderAccountId(accountId), true); err != nil {
+		t.Fatalf("error logging out out of account: %v", err)
+	}
 }
 
 func TestGetSymbols(t *testing.T) {

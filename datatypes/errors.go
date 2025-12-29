@@ -91,6 +91,14 @@ func (e *EventSubscriptionDoesNotExistError[EventT]) Error() string {
 	return fmt.Sprintf("event type %v on account id %d does not exist on account manager", e.EventType, e.AccountId)
 }
 
+type AccountDisconnectConfirmClearedError struct {
+	AccountId CtraderAccountId
+}
+
+func (e *AccountDisconnectConfirmClearedError) Error() string {
+	return fmt.Sprintf("account disconnect confirms was cleared during wait for account id %d", e.AccountId)
+}
+
 /*
 	event_handler.go
 */

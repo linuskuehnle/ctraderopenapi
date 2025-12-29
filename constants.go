@@ -170,6 +170,10 @@ var isAPIEvent = map[ProtoOAPayloadType]bool{
 	PROTO_OA_MARGIN_CALL_TRIGGER_EVENT:        true,
 }
 
+var hasHookForAPIEvent = map[ProtoOAPayloadType]bool{
+	PROTO_OA_ACCOUNT_DISCONNECT_EVENT: true,
+}
+
 const (
 	// Subscribable events
 	APIEventType_Spots apiEventType = iota

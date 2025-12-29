@@ -55,7 +55,7 @@ func (c *apiClient) AuthenticateAccount(ctid CtraderAccountId, accessToken Acces
 	return &res, nil
 }
 
-func (c *apiClient) LogoutAccount(ctid CtraderAccountId) (*ProtoOAAccountLogoutRes, error) {
+func (c *apiClient) LogoutAccount(ctid CtraderAccountId, waitForConfirm bool) (*ProtoOAAccountLogoutRes, error) {
 	req := messages.ProtoOAAccountLogoutReq{
 		CtidTraderAccountId: proto.Int64(int64(ctid)),
 	}
@@ -65,10 +65,19 @@ func (c *apiClient) LogoutAccount(ctid CtraderAccountId) (*ProtoOAAccountLogoutR
 
 	reqData := RequestData{
 		Ctx:     reqCtx,
-		ReqType: PROTO_OA_ACCOUNT_AUTH_REQ,
+		ReqType: PROTO_OA_ACCOUNT_LOGOUT_REQ,
 		Req:     &req,
-		ResType: PROTO_OA_ACCOUNT_AUTH_RES,
+		ResType: PROTO_OA_ACCOUNT_LOGOUT_RES,
 		Res:     &res,
+	}
+
+	wg := sync.WaitGroup{}
+
+	if waitForConfirm {
+		wg.Go(func() {
+			// Wait for the disconnect event confirming the logout
+			c.accManager.WaitForAccDisconnectConfirm(ctid)
+		})
 	}
 
 	if err := c.SendRequest(reqData); err != nil {
@@ -76,6 +85,8 @@ func (c *apiClient) LogoutAccount(ctid CtraderAccountId) (*ProtoOAAccountLogoutR
 	}
 
 	c.accManager.RemoveAccountId(ctid)
+
+	wg.Wait()
 	return &res, nil
 }
 

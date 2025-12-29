@@ -397,8 +397,10 @@ func (c *apiClient) runListenerRemove(listenerCtx context.Context, removeCallbac
 // handleAPIEvent is called on an incoming event message that is listenable
 func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
 	var eventId datatypes.EventId = datatypes.EventId(msgType)
-	if !c.apiEventHandler.HasEvent(eventId) {
-		// No listener for this event, ignore
+
+	hasEvent := c.apiEventHandler.HasEvent(eventId)
+	if !hasEvent && !hasHookForAPIEvent[msgType] {
+		// No listener and hook for this event, so ignore it
 		return nil
 	}
 
@@ -529,9 +531,9 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 
 		event = &eventMsg
 	case PROTO_OA_ACCOUNT_DISCONNECT_EVENT:
-		var depthEventMsg ProtoOAAccountDisconnectEvent
+		var eventMsg ProtoOAAccountDisconnectEvent
 
-		if err := proto.Unmarshal(payloadBytes, &depthEventMsg); err != nil {
+		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
 			perr := &ProtoUnmarshalError{
 				CallContext: "proto OA account disconnect event",
 				Err:         err,
@@ -539,7 +541,10 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &depthEventMsg
+		ctid := CtraderAccountId(eventMsg.GetCtidTraderAccountId())
+		c.onAccountDisconnect(ctid)
+
+		event = &eventMsg
 	case PROTO_OA_MARGIN_CALL_UPDATE_EVENT:
 		var eventMsg ProtoOAMarginCallUpdateEvent
 
@@ -568,6 +573,11 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		return &UnexpectedMessageTypeError{
 			MsgType: msgType,
 		}
+	}
+
+	if !hasEvent {
+		// No listener for this event, so ignore it
+		return nil
 	}
 
 	eventHandled := c.apiEventHandler.HandleEvent(eventId, event)

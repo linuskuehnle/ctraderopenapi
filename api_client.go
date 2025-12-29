@@ -105,10 +105,12 @@ type APIClient interface {
 	// LogoutAccount logs out from the specified cTrader account.
 	// After a successful logout, the account will no longer receive events
 	// and any further requests for the account will fail until it is.
+	// waitForConfirm controls whether this function waits for the server event
+	// `ProtoOAAccountDisconnectEvent` confirming the logout before returning.
 	//
 	// Note: The confirmation of a successful logout is not this function returning,
 	// but when the server sends the corresponding ProtoOAAccountDisconnectEvent message.
-	LogoutAccount(ctid CtraderAccountId) (*ProtoOAAccountLogoutRes, error)
+	LogoutAccount(ctid CtraderAccountId, waitForConfirm bool) (*ProtoOAAccountLogoutRes, error)
 
 	// RefreshAccessToken refreshes an expired access token using the provided
 	// refresh token. Returns a new access token that can be used for subsequent

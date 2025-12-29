@@ -39,6 +39,10 @@ type AccountManager[EventT comparable, SubDataT any] interface {
 	GetAllAccountIds() []CtraderAccountId
 	GetAccountIdsOfAccessToken(AccessToken) ([]CtraderAccountId, error)
 	GetEventSubscriptionsOfAccountId(CtraderAccountId) (map[EventT]SubDataT, error)
+
+	WaitForAccDisconnectConfirm(ctid CtraderAccountId) error
+	ConfirmAccDisconnect(ctid CtraderAccountId)
+	ClearAccDisconnectConfirms()
 }
 
 type accountManager[EventT comparable, SubDataT any] struct {
@@ -54,6 +58,10 @@ type accountManager[EventT comparable, SubDataT any] struct {
 
 	// Event subscription referencing
 	subscriptionsByAccount map[CtraderAccountId]map[EventT]SubDataT
+
+	// Confirm account disconnect tracking
+	accDisconnectConfirms        map[CtraderAccountId]contextInstance
+	disconnectConfirmCtxInstance contextInstance
 }
 
 func NewAccountManager[EventT comparable, SubDataT any]() AccountManager[EventT, SubDataT] {
@@ -71,6 +79,9 @@ func newAccountManager[EventT comparable, SubDataT any]() *accountManager[EventT
 		accountIdsByAccessToken: make(map[AccessToken][]CtraderAccountId),
 
 		subscriptionsByAccount: make(map[CtraderAccountId]map[EventT]SubDataT),
+
+		accDisconnectConfirms:        make(map[CtraderAccountId]contextInstance),
+		disconnectConfirmCtxInstance: newContextInstance(),
 	}
 }
 
@@ -324,4 +335,49 @@ func (m *accountManager[EventT, SubDataT]) GetEventSubscriptionsOfAccountId(acco
 	result := make(map[EventT]SubDataT)
 	maps.Copy(result, subs)
 	return result, nil
+}
+
+func (m *accountManager[EventT, SubDataT]) WaitForAccDisconnectConfirm(ctid CtraderAccountId) error {
+	m.mu.Lock()
+	managerCtx := m.disconnectConfirmCtxInstance.ctx
+	accCtxInstance, exists := m.accDisconnectConfirms[ctid]
+
+	if !exists {
+		ctxInstance := newContextInstance()
+
+		m.accDisconnectConfirms[ctid] = ctxInstance
+		accCtxInstance = ctxInstance
+	}
+	m.mu.Unlock()
+
+	select {
+	case <-managerCtx.Done():
+		// Confirmation map cleared mid wait
+		return &AccountDisconnectConfirmClearedError{AccountId: ctid}
+	case <-accCtxInstance.ctx.Done():
+		// Confirmation received
+	}
+
+	return nil
+}
+
+func (m *accountManager[EventT, SubDataT]) ConfirmAccDisconnect(ctid CtraderAccountId) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	accCtxInstance, exists := m.accDisconnectConfirms[ctid]
+	if exists {
+		accCtxInstance.cancelCtx()
+		delete(m.accDisconnectConfirms, ctid)
+	}
+}
+
+func (m *accountManager[EventT, SubDataT]) ClearAccDisconnectConfirms() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.disconnectConfirmCtxInstance.cancelCtx()
+	m.disconnectConfirmCtxInstance = newContextInstance()
+
+	m.accDisconnectConfirms = make(map[CtraderAccountId]contextInstance)
 }

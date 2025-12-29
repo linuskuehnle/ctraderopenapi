@@ -94,3 +94,16 @@ func NewRequestMetaData(reqData *RequestData, errCh chan error, heapErrCh chan e
 
 	return &r, nil
 }
+
+type contextInstance struct {
+	ctx       context.Context
+	cancelCtx context.CancelFunc
+}
+
+func newContextInstance() contextInstance {
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	return contextInstance{
+		ctx:       ctx,
+		cancelCtx: cancelCtx,
+	}
+}
