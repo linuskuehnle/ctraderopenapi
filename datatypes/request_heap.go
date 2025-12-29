@@ -156,12 +156,12 @@ func (h *requestHeap) checkRequestContexts() {
 			ctxErr = n.Ctx.Err()
 		}
 
-		go func(ch chan error, e error) {
-			// send the RequestContextExpiredError if possible and then close channel to signal
-			// completion. If e is nil, still close the channel to indicate removal.
-			if e != nil {
+		go func(ch chan error, err error) {
+			// Send the RequestContextExpiredError if possible and then close channel to signal
+			// completion. If err is nil, still close the channel to indicate removal.
+			if err != nil {
 				// best-effort send; block until receiver takes it so they reliably observe the error
-				ch <- &RequestContextExpiredError{Err: e}
+				ch <- &RequestContextExpiredError{Err: err}
 			}
 			close(ch)
 		}(ch, ctxErr)

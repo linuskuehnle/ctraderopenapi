@@ -290,7 +290,7 @@ func (c *apiClient) reloginActiveAccounts() error {
 	for ctid, accessToken := range tokenByCtid {
 		wg.Add(1)
 
-		go func() {
+		go func(ctid CtraderAccountId, accessToken AccessToken) {
 			defer wg.Done()
 
 			req := messages.ProtoOAAccountAuthReq{
@@ -313,7 +313,7 @@ func (c *apiClient) reloginActiveAccounts() error {
 				errCh <- err
 				return
 			}
-		}()
+		}(ctid, accessToken)
 	}
 
 	wg.Wait()
@@ -334,14 +334,14 @@ func (c *apiClient) resubscribeActiveSubs() error {
 	for _, ctid := range ctids {
 		wg.Add(1)
 
-		go func() {
+		go func(ctid CtraderAccountId) {
 			defer wg.Done()
 
 			if err := c.resubscribeAccountSubs(ctid); err != nil {
 				errCh <- err
 				return
 			}
-		}()
+		}(ctid)
 	}
 
 	wg.Wait()
@@ -384,7 +384,7 @@ func (c *apiClient) resubscribeAccountSubs(ctid CtraderAccountId) error {
 
 		for _, e := range eventDataBatch {
 			wg.Add(1)
-			go func() {
+			go func(e APIEventData) {
 				defer wg.Done()
 
 				if _, err := c.subscribeAPIEvent(e, true); err != nil {
@@ -397,7 +397,7 @@ func (c *apiClient) resubscribeAccountSubs(ctid CtraderAccountId) error {
 					}
 				}
 				// Successfully resubscribed
-			}()
+			}(e)
 		}
 
 		wg.Wait()

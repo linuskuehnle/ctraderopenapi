@@ -614,14 +614,14 @@ func SpawnAPIEventHandler[T APIEvent](ctx context.Context, onEventCh chan APIEve
 		}
 	}
 
-	go func(onEvent func(T)) {
+	go func(onEvent func(T), onEventCh chan APIEvent) {
 		for event := range onEventCh {
 			typedEvent, ok := CastToEventType[T](event)
 			if ok {
 				onEvent(typedEvent)
 			}
 		}
-	}(onEvent)
+	}(onEvent, onEventCh)
 	return nil
 }
 
@@ -660,13 +660,13 @@ func SpawnClientEventHandler[T ClientEvent](ctx context.Context, onEventCh chan 
 		}
 	}
 
-	go func(onEvent func(T)) {
+	go func(onEvent func(T), onEventCh chan ClientEvent) {
 		for event := range onEventCh {
 			typedEvent, ok := CastToClientEventType[T](event)
 			if ok {
 				onEvent(typedEvent)
 			}
 		}
-	}(onEvent)
+	}(onEvent, onEventCh)
 	return nil
 }

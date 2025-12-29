@@ -452,12 +452,12 @@ func (c *tcpClient) read() ([]byte, error) {
 func (c *tcpClient) waitForHeader(ctx context.Context) (bool, error) {
 	errCh := make(chan error, 1)
 
-	go func() {
+	go func(errCh chan error) {
 		defer close(errCh)
 
 		_, err := c.reader.Peek(4)
 		errCh <- err
-	}()
+	}(errCh)
 
 	select {
 	case <-ctx.Done():

@@ -78,7 +78,7 @@ func TestClientReqConcurrency(t *testing.T) {
 	var reqErrs []error = make([]error, numRequests)
 
 	for i := range numRequests {
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 
 			req := ProtoOAVersionReq{
@@ -100,7 +100,7 @@ func TestClientReqConcurrency(t *testing.T) {
 				reqErrs[i] = err
 				return
 			}
-		}()
+		}(i)
 	}
 
 	// Wait for all requests to finish
@@ -410,7 +410,7 @@ func TestClientRateLimiter(t *testing.T) {
 	var reqErrs []error = make([]error, numRequests)
 
 	for i := range numRequests {
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 
 			req := ProtoOAVersionReq{
@@ -432,7 +432,7 @@ func TestClientRateLimiter(t *testing.T) {
 				reqErrs[i] = err
 				return
 			}
-		}()
+		}(i)
 	}
 
 	// Wait for all requests to finish
@@ -466,7 +466,7 @@ func TestBatchRequestSendOnConnLoss(t *testing.T) {
 	connLossCh := make(chan ClientEvent)
 	onConnLoss := func(e *ConnectionLossEvent) {
 		for i := range numRequests {
-			go func() {
+			go func(i int) {
 				defer wg.Done()
 
 				req := ProtoOAVersionReq{
@@ -488,7 +488,7 @@ func TestBatchRequestSendOnConnLoss(t *testing.T) {
 					reqErrs[i] = err
 					return
 				}
-			}()
+			}(i)
 		}
 	}
 
