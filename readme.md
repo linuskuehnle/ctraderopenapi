@@ -61,32 +61,46 @@ full comments and examples):
 
 - `APIClient` — main interface.
 	Important methods:
-	- `Connect() error` / `Disconnect()`
+	
+	**Connection management:**
+	- `Connect() error` / `Disconnect()` — establish or close the connection
+	
+	**Account authentication:**
+	- `AuthenticateAccount(CtraderAccountId, AccessToken) (*ProtoOAAccountAuthRes, error)`
+		— authenticate with a specific cTrader account using an access token.
+		Must be called before making account-specific requests or subscribing to account events.
+	- `LogoutAccount(CtraderAccountId, bool) (*ProtoOAAccountLogoutRes, error)` — logout from
+		a cTrader account. The boolean parameter controls whether to wait for the server's
+		`ProtoOAAccountDisconnectEvent` confirmation before returning.
+	- `RefreshAccessToken(AccessToken, RefreshToken) (*ProtoOARefreshTokenRes, error)`
+		— refresh an expired access token using a refresh token, returns a new access token.
+	
+	**Request/Response:**
 	- `SendRequest(RequestData) error` — sends a protobuf-typed request and
 		unmarshals the response into the provided response object.
+	
+	**Event subscriptions:**
 	- `SubscribeAPIEvent(APIEventData)` / `UnsubscribeAPIEvent(...)` —
 		subscribe/unsubscribe for server-side subscription-based events.
 	- `SubscribeClientEvent(SubscribableClientEventData)` / `UnsubscribeClientEvent(...)` —
 		subscribe/unsubscribe for client-side events.
+	
+	**Event listening:**
 	- `ListenToAPIEvent(ctx, eventType, chan APIEvent)` — register a
 		long-running listener channel for push events.
 	- `ListenToClientEvent(ctx, clientEventType, chan ClientEvent)`
-		— listen for client-side events
+		— listen for client-side events (connection loss, reconnect events, fatal errors).
 	
-	Client-side events are e.g. fatal client errors, connection loss, reconnect success
-	and reconnect fail.
+	**Client event types:** Fatal client errors, connection loss, reconnect success, and reconnect fail.
 	
-	Fatal (non-recoverable) client errors will be emitted as client event of type
-	FatalErrorEvent. If there is a listener channel installed, the error will be sent to
-	the channel and the API client recovers by dropping the tcp connection and running the
-	reconnect sequence.
-	If there is no listener channel installed for the fatal error event, a fatal error will
-	be raised as a panic instead.
+	**Error handling:** Fatal (non-recoverable) client errors are emitted as `FatalErrorEvent`.
+	If a listener channel is registered, the error is sent to the channel and the client
+	recovers by reconnecting. Without a listener, a fatal error raises a panic.
 
-	The API Client takes care of connection losses. You can listen to reconnect events
-	(ConnectionLossEvent, ReconnectSuccessEvent, ReconnectFailEvent) using ListenToClientEvent.
-	API Events subscribed to will automatically be resubscribed before ReconnectSuccessEvent is
-	emitted.
+	**Reconnection:** The API Client automatically handles connection losses. Register listeners
+	for `ConnectionLossEvent`, `ReconnectSuccessEvent`, and `ReconnectFailEvent` using
+	`ListenToClientEvent`. Previously subscribed API Events are automatically resubscribed
+	before `ReconnectSuccessEvent` is emitted.
 
 	Runtime configuration:
 	- `WithQueueBufferSize(int)` updates the number of queued requests that may be buffered
@@ -95,22 +109,32 @@ full comments and examples):
 		TCP messages from the network reader.
 	- `WithRequestHeapIterationTimeout(time.Duration)` updates interval used by the request heap
 		to periodically check for expired request contexts.
+	- `WithRequestTimeout(time.Duration)` updates the duration until a request roundtrip is aborted
+		no matter if already sent or not.
 	- `DisableDefaultRateLimiter()` to disable the client-side rate limiter.
 
-	The rate limiter ensures that the 50 live requests per second and 5 historical requests per
-	second are not exceeded. In case there still occurs a server-side rate limit due to network
-	divergence (very unlikely) it enqueues the request again, so the caller does not have to worry
-	about it.
+	**Rate limiting:** The client enforces rate limits to prevent server-side throttling:
+	- 50 live requests per second (ProtoOALiveView subscriptions)
+	- 5 historical requests per second (ProtoOAHistoricalData requests)
+	
+	If the server-side rate limit is still exceeded due to network divergence, the request
+	is automatically re-enqueued, so callers do not need to handle rate limit errors.
 
 - `ApplicationCredentials{ ClientId, ClientSecret }` — credentials used by the application to
-	authenticate to the OpenAPI. Validate with `CheckError()`.
+	authenticate with the OpenAPI. Validate with `CheckError()`.
 
-- Event adapters & helpers:
-	- `APIEvent` and `ClientEvent` are marker interfaces.
-	- `CastToEventType[T]` and `CastToClientEventType[T]` helpers to cast the generic event type
-		to the concrete event types.
-	- `SpawnAPIEventHandler` and `SpawnClientEventHandler` start small goroutines that forward
-		typed events to your handler.
+- `CtraderAccountId` — thin typed alias over int64 for explicit account ID references.
+
+- `AccessToken` — thin typed alias over string for access tokens obtained after authenticating an account.
+
+- `RefreshToken` — thin typed alias over string for refresh tokens used to obtain new access tokens.
+
+- Event helpers and adapters:
+	- `APIEvent` and `ClientEvent` — marker interfaces for event types.
+	- `CastToEventType[T]` and `CastToClientEventType[T]` — helpers to cast generic event types
+		to concrete event types.
+	- `SpawnAPIEventHandler` and `SpawnClientEventHandler` — start small goroutines that forward
+		typed events to your handler, eliminating the need for manual type assertions.
 
 ## Examples
 
@@ -155,7 +179,91 @@ func main() {
 }
 ```
 
-2) Subscribe to spot events and handle them with the typed adapter
+2) Account authentication and logout
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/linuskuehnle/ctraderopenapi"
+)
+
+func main() {
+	cred := ctraderopenapi.ApplicationCredentials{ClientId: "id", ClientSecret: "secret"}
+	client, err := ctraderopenapi.NewAPIClient(cred, ctraderopenapi.Environment_Demo)
+	if err != nil {
+		panic(err)
+	}
+
+	if err := client.Connect(); err != nil {
+		panic(err)
+	}
+	defer client.Disconnect()
+
+	// Authenticate with a cTrader account
+	accountId := ctraderopenapi.CtraderAccountId(123456)
+	accessToken := ctraderopenapi.AccessToken("your-access-token")
+	
+	authRes, err := client.AuthenticateAccount(accountId, accessToken)
+	if err != nil {
+		fmt.Println("authentication failed:", err)
+		return
+	}
+
+	fmt.Println("authenticated successfully:", authRes)
+
+	// Use the authenticated account to make requests or subscribe to events...
+
+	// Logout from the account (waitForConfirm=true waits for server confirmation)
+	if _, err := client.LogoutAccount(accountId, true); err != nil {
+		fmt.Println("logout failed:", err)
+		return
+	}
+
+	fmt.Println("logged out successfully")
+}
+```
+
+3) Token refresh
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/linuskuehnle/ctraderopenapi"
+)
+
+func main() {
+	cred := ctraderopenapi.ApplicationCredentials{ClientId: "id", ClientSecret: "secret"}
+	client, err := ctraderopenapi.NewAPIClient(cred, ctraderopenapi.Environment_Demo)
+	if err != nil {
+		panic(err)
+	}
+
+	if err := client.Connect(); err != nil {
+		panic(err)
+	}
+	defer client.Disconnect()
+
+	// Refresh an expired access token
+	expiredToken := ctraderopenapi.AccessToken("expired-token")
+	refreshToken := ctraderopenapi.RefreshToken("refresh-token")
+	
+	refreshRes, err := client.RefreshAccessToken(expiredToken, refreshToken)
+	if err != nil {
+		fmt.Println("token refresh failed:", err)
+		return
+	}
+
+	// Use the new access token for subsequent requests
+	newAccessToken := ctraderopenapi.AccessToken(refreshRes.GetAccessToken())
+	fmt.Println("new access token:", newAccessToken)
+}
+```
+
+4) Subscribe to spot events and handle them with the typed adapter
 
 ```go
 ctx, cancel := context.WithCancel(context.Background())
@@ -182,7 +290,7 @@ if err := client.SubscribeAPIEvent(sub); err != nil {
 }
 ```
 
-3) Listen for client events; e.g. ReconnectSuccessEvent:
+5) Listen for client events; e.g. ReconnectSuccessEvent:
 
 ```go
 
@@ -195,9 +303,17 @@ ctraderopenapi.SpawnClientEventHandler(context.Background(), clientCh, func(e *c
 })
 ```
 
-I suggest registering all event listener channels before calling apiClient.Connect().
-apiClient.Disconnect() unregisters all event listener channels, hence if you want to
-connect again and use the same listeners you explicitly need to register them again.
+I suggest registering all event listener channels before calling `apiClient.Connect()`.
+`apiClient.Disconnect()` unregisters all event listener channels; if you want to
+reconnect and use the same listeners, explicitly register them again before the next `Connect()` call.
+
+**Authentication workflow:**
+1. Create and connect the API client with application credentials
+2. Authenticate with a specific account using `AuthenticateAccount(accountId, accessToken)`
+3. Make account-specific requests or subscribe to events
+4. Optionally refresh access tokens with `RefreshAccessToken()` if tokens expire
+	(see APIEvent `ProtoOAAccountsTokenInvalidatedEvent`)
+5. Logout with `LogoutAccount()` when finished with the account
 
 ## Running tests
 
