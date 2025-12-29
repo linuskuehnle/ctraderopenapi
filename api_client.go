@@ -50,24 +50,28 @@ import (
 type APIClient interface {
 	// WithRequestTimeout updates the duration until a request roundtrip is aborted no
 	// matter if already sent or not.
+	//
 	// It must be called while the client is not connected (before `Connect`) and returns
 	// the same client to allow fluent construction.
 	WithRequestTimeout(time.Duration) APIClient
 
 	// WithQueueBufferSize updates the number of queued requests that may be buffered
 	// by the internal request queue before backpressure applies.
+	//
 	// It must be called while the client is not connected (before `Connect`) and returns
 	// the same client to allow fluent construction.
 	WithQueueBufferSize(int) APIClient
 
 	// TCPMessageBufferSize updates the size of the channel used to receive inbound
 	// TCP messages from the network reader.
+	//
 	// It must be called while the client is not connected (before `Connect`) and returns
 	// the same client to allow fluent construction.
 	WithTCPMessageBufferSize(int) APIClient
 
 	// WithRequestHeapIterationTimeout updates interval used by the request heap to
 	// periodically check for expired request contexts.
+	//
 	// It must be called while the client is not connected (before `Connect`) and returns
 	// the same client to allow fluent construction.
 	WithRequestHeapIterationTimeout(time.Duration) APIClient
@@ -75,6 +79,7 @@ type APIClient interface {
 	// DisableDefaultRateLimiter disables the internal request rate limiter. Only do this
 	// when you either use your own rate limiter or if you do not expect to ever reach the
 	// request rate limit.
+	//
 	// It must be called while the client is not connected (before `Connect`) and returns
 	// the same client to allow fluent construction.
 	DisableDefaultRateLimiter() APIClient
