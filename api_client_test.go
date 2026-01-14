@@ -15,6 +15,8 @@
 package ctraderopenapi
 
 import (
+	"github.com/linuskuehnle/ctraderopenapi/messages"
+
 	"context"
 	"errors"
 	"sync"
@@ -154,6 +156,12 @@ func TestProtoOAErrorResponse(t *testing.T) {
 		var respErr *ResponseError
 		if !errors.As(err, &respErr) {
 			t.Fatalf("unexpected error of type RequestError. got: %v", err)
+		}
+		if respErr.ErrorCode != messages.ProtoErrorCode_name[int32(messages.ProtoErrorCode_INVALID_REQUEST)] {
+			t.Fatalf("expected error code INVALID_REQUEST, got: %v", respErr.ErrorCode)
+		}
+		if respErr.Description != "Trading account is not authorized" {
+			t.Fatalf("expected error description 'Trading account is not authorized', got: %v", respErr.Description)
 		}
 	} else {
 		t.Fatal("expected RequestError error return value")
