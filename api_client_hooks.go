@@ -15,11 +15,12 @@
 package ctraderopenapi
 
 import (
+	"github.com/linuskuehnle/ctraderopenapi/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/messages"
+
 	"context"
 	"errors"
 
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-	"github.com/linuskuehnle/ctraderopenapi/messages"
 	"google.golang.org/protobuf/proto"
 )
 

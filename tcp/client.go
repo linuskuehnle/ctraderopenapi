@@ -15,6 +15,8 @@
 package tcp
 
 import (
+	"github.com/linuskuehnle/ctraderopenapi/datatypes"
+
 	"bufio"
 	"context"
 	"crypto/tls"
@@ -25,8 +27,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
 )
 
 type TCPClient interface {

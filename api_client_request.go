@@ -15,15 +15,15 @@
 package ctraderopenapi
 
 import (
+	"github.com/linuskuehnle/ctraderopenapi/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/messages"
+
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
-
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-	"github.com/linuskuehnle/ctraderopenapi/messages"
 )
 
 func (c *apiClient) AuthenticateAccount(ctid CtraderAccountId, accessToken AccessToken) (*ProtoOAAccountAuthRes, error) {

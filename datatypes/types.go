@@ -15,14 +15,14 @@
 package datatypes
 
 import (
+	"github.com/linuskuehnle/ctraderopenapi/messages"
+
 	"context"
 	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/linuskuehnle/ctraderopenapi/messages"
 )
 
 type CtraderAccountId int64

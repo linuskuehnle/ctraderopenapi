@@ -15,9 +15,9 @@
 package ctraderopenapi
 
 import (
-	"time"
-
 	"github.com/linuskuehnle/ctraderopenapi/datatypes"
+
+	"time"
 )
 
 const (
