@@ -189,7 +189,7 @@ func TestResubscribeOnReconnect(t *testing.T) {
 	c.tcpClient.JustCloseConn()
 
 	// Ensure the initial event message from before JustCloseConn is flushed since no listener is installed yet.
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 1)
 
 	err, ok := <-errCh
 	if ok {
