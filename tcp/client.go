@@ -32,11 +32,12 @@ import (
 type TCPClient interface {
 	WithTimeout(timeout time.Duration) TCPClient
 	WithTLS(config *tls.Config) TCPClient
-	WithMessageCallbackChan(onMessageCh chan []byte, onFatalError func(error)) TCPClient
+	WithMessageCallbackChan(onMessageCh chan []byte) TCPClient
 	WithReconnectTimeout(timeout time.Duration) TCPClient
 	WithMaxReconnectAttempts(maxAttempts int) TCPClient
 	WithInfiniteReconnectAttempts() TCPClient
 	WithConnEventHooks(onConnectionLoss func(), onReconnectSuccess func(), onReconnectFail func(error)) TCPClient
+	WithRetryBackoff(backoff datatypes.RetryBackoff) TCPClient
 
 	GetTimeout() time.Duration
 
@@ -51,9 +52,8 @@ type TCPClient interface {
 }
 
 type messageHandling struct {
-	stoppedCh      chan struct{}
-	onMessageCh    chan []byte
-	onMessageError func(error)
+	stoppedCh   chan struct{}
+	onMessageCh chan []byte
 }
 
 type tcpClient struct {
@@ -81,23 +81,26 @@ type tcpClient struct {
 	onReconnectFail    func(error)
 
 	messageHandling *messageHandling
+
+	onFatalErr func(error)
 }
 
-func NewTCPClient(address string) TCPClient {
-	return newTCPClient(address)
+func NewTCPClient(address string, onFatalErr func(error)) TCPClient {
+	return newTCPClient(address, onFatalErr)
 }
 
-func newTCPClient(address string) *tcpClient {
-	backoff, _ := datatypes.NewRetryBackoff(DefaultReconnectBackoffLadder, DefaultReconnectBackoffStepDown)
+func newTCPClient(address string, onFatalErr func(error)) *tcpClient {
+	if onFatalErr == nil {
+		onFatalErr = func(err error) {}
+	}
 
 	return &tcpClient{
-		mu:      sync.RWMutex{},
-		address: address,
-		timeout: DefaultTimeout,
-
-		reconnectBackoff: backoff,
+		mu:               sync.RWMutex{},
+		address:          address,
+		timeout:          DefaultTimeout,
 		reconnectTimeout: DefaultReconnectTimeout,
 		maxReconnects:    DefaultMaxReconnects,
+		onFatalErr:       onFatalErr,
 	}
 }
 
@@ -151,6 +154,18 @@ func (c *tcpClient) WithConnEventHooks(onConnectionLoss func(), onReconnectSucce
 	return c
 }
 
+func (c *tcpClient) WithRetryBackoff(backoff datatypes.RetryBackoff) TCPClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		return c
+	}
+
+	c.reconnectBackoff = backoff
+	return c
+}
+
 func (c *tcpClient) WithTimeout(timeout time.Duration) TCPClient {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -176,21 +191,20 @@ func (c *tcpClient) WithTLS(config *tls.Config) TCPClient {
 	return c
 }
 
-func (c *tcpClient) WithMessageCallbackChan(onMessageCh chan []byte, onFatalError func(error)) TCPClient {
+func (c *tcpClient) WithMessageCallbackChan(onMessageCh chan []byte) TCPClient {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.conn != nil { // Disallow changing timeout while connection is open
 		return c
 	}
-	if onMessageCh == nil || onFatalError == nil {
+	if onMessageCh == nil {
 		return c
 	}
 
 	c.messageHandling = &messageHandling{
-		stoppedCh:      make(chan struct{}),
-		onMessageCh:    onMessageCh,
-		onMessageError: onFatalError,
+		stoppedCh:   make(chan struct{}),
+		onMessageCh: onMessageCh,
 	}
 	return c
 }
@@ -529,9 +543,7 @@ func (c *tcpClient) handleInputStream(ctx context.Context) {
 			payload, err := c.readNextDataBlock(ctx)
 			if err != nil {
 				if !isNetworkFatal(err) {
-					// Fatal error (e.g., decoding error)
-					go c.messageHandling.onMessageError(err)
-					return
+					c.onFatalErr(err)
 				}
 
 				// Fatal network connection error — connection is lost
@@ -596,7 +608,7 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 		case <-timer.C:
 			if maxAttempts > 0 {
 				if reconnectAttempt >= maxAttempts {
-					go c.messageHandling.onMessageError(&MaxReconnectAttemptsReachedError{
+					go c.onFatalErr(&MaxReconnectAttemptsReachedError{
 						MaxAttempts: maxAttempts,
 					})
 					return
@@ -626,7 +638,7 @@ func (c *tcpClient) handleReconnectFail(err error) {
 	if c.onReconnectFail != nil {
 		c.onReconnectFail(err)
 	} else {
-		go c.messageHandling.onMessageError(err)
+		go c.onFatalErr(err)
 	}
 }
 
