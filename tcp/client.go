@@ -546,21 +546,9 @@ func (c *tcpClient) handleInputStream(ctx context.Context) {
 					c.onFatalErr(err)
 				}
 
-				// Fatal network connection error — connection is lost
-				c.reconnectBackoff.Backoff()
-
-				reconnectCh := make(chan struct{})
-				go c.execReconnectLoop(ctx, reconnectCh)
-
-				select {
-				case <-ctx.Done():
+				if reconnected := c.execReconnectLoop(ctx); !reconnected {
 					// Context canceled — connection is being closed gracefully
 					return
-				case _, ok := <-reconnectCh:
-					if !ok {
-						// Reconnect failed or context has been cancelled. No reconnect signal has been emitted.
-						return
-					}
 				}
 
 				// Reconnect successful
@@ -574,15 +562,7 @@ func (c *tcpClient) handleInputStream(ctx context.Context) {
 	}
 }
 
-func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan struct{}) {
-	defer close(reconnectedCh) // Ensure channel is always closed on all exit paths
-
-	permitted := c.reconnectBackoff.WaitForPermit(ctx)
-	if !permitted {
-		// Context canceled during backoff wait - clean shutdown
-		return
-	}
-
+func (c *tcpClient) execReconnectLoop(ctx context.Context) bool {
 	c.mu.Lock()
 
 	c.conn = nil
@@ -601,17 +581,25 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 	defer timer.Stop()
 
 	for {
+		if c.reconnectBackoff != nil {
+			permitted := c.reconnectBackoff.WaitForPermit(ctx)
+			if !permitted {
+				// Context canceled during backoff wait - clean shutdown
+				return false
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			// Context canceled during reconnect - clean shutdown
-			return
+			return false
 		case <-timer.C:
 			if maxAttempts > 0 {
 				if reconnectAttempt >= maxAttempts {
 					go c.onFatalErr(&MaxReconnectAttemptsReachedError{
 						MaxAttempts: maxAttempts,
 					})
-					return
+					return false
 				}
 
 				reconnectAttempt++
@@ -621,9 +609,7 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 			err := c.establishConn("")
 			if err == nil {
 				c.mu.Unlock()
-
-				reconnectedCh <- struct{}{} // Signal successful reconnect before closing
-				return
+				return true
 			}
 			c.mu.Unlock()
 
@@ -635,6 +621,11 @@ func (c *tcpClient) execReconnectLoop(ctx context.Context, reconnectedCh chan st
 }
 
 func (c *tcpClient) handleReconnectFail(err error) {
+	// Apply backoff on failed reconnect
+	if c.reconnectBackoff != nil {
+		c.reconnectBackoff.Backoff()
+	}
+
 	if c.onReconnectFail != nil {
 		c.onReconnectFail(err)
 	} else {
