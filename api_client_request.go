@@ -213,7 +213,11 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 
 	if err := checkResponseForError(payload, resData.PayloadType); err != nil {
 		var resErr *ResponseError
-		// Re-send all requests that are not of type ResponseError or that are a rate limit ResponseError
+		/*
+			Retry requests on either of those conditions:
+			- The error is not a ResponseError, meaning it is a transport level error
+			- The error is a ResponseError with error code "server side rate limit hit"
+		*/
 		if !errors.As(err, &resErr) || resErr.ErrorCode == resErrorCode_serverSideRateLimitHit {
 			// Set rate limiter penalty
 			rateLimitType := rateLimitTypeByReqType[metaData.ReqType]
