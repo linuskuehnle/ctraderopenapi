@@ -231,6 +231,7 @@ type apiClient struct {
 	requestHeap   datatypes.RequestHeap
 	rateLimiters  map[rateLimitType]datatypes.RateLimiter
 	accManager    datatypes.AccountManager[eventType, SubscriptionData]
+	retryBackoff  datatypes.RetryBackoff
 
 	apiEventHandler    datatypes.EventHandler[proto.Message]
 	clientEventHandler datatypes.EventHandler[ClientEvent]
@@ -260,6 +261,11 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		return nil, err
 	}
 
+	retryBackoff, err := datatypes.NewRetryBackoff(DefaultReconnectBackoffLadder, DefaultReconnectBackoffStepDown)
+	if err != nil {
+		return nil, err
+	}
+
 	c := apiClient{
 		mu: sync.RWMutex{},
 
@@ -270,6 +276,7 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		requestHeap:   datatypes.NewRequestHeap(),
 		rateLimiters:  make(map[rateLimitType]datatypes.RateLimiter),
 		accManager:    datatypes.NewAccountManager[eventType, SubscriptionData](),
+		retryBackoff:  retryBackoff,
 
 		apiEventHandler:    datatypes.NewEventHandler[proto.Message](),
 		clientEventHandler: datatypes.NewEventHandler[ClientEvent](),
@@ -279,12 +286,13 @@ func newApiClient(cred ApplicationCredentials, env Environment) (*apiClient, err
 		connMu: sync.Mutex{},
 	}
 
-	c.tcpClient = tcp.NewTCPClient(string(env.GetAddress())).
+	c.tcpClient = tcp.NewTCPClient(string(env.GetAddress()), c.onFatalError).
 		WithTLS(tlsConfig).
 		WithTimeout(time.Millisecond*100).
 		WithReconnectTimeout(time.Second*3).
 		WithInfiniteReconnectAttempts().
-		WithConnEventHooks(c.onConnectionLoss, c.onReconnectSuccess, c.onReconnectFail)
+		WithConnEventHooks(c.onConnectionLoss, c.onReconnectSuccess, c.onReconnectFail).
+		WithRetryBackoff(c.retryBackoff)
 
 	c.rateLimiters[rateLimitType_Live], _ = datatypes.NewRateLimiter(rateLimitN_Live-1, rateLimitInterval, rateLimitHitTimeout)
 	c.rateLimiters[rateLimitType_Historical], _ = datatypes.NewRateLimiter(rateLimitN_Historical-1, rateLimitInterval, rateLimitHitTimeout)
@@ -385,7 +393,9 @@ func (c *apiClient) connect() error {
 	c.requestHeap.SetIterationInterval(c.cfg.requestHeapIterationTimeout)
 
 	c.requestQueue.WithDataCallbackChan(c.queueDataCh)
-	c.tcpClient.WithMessageCallbackChan(c.tcpMessageCh, c.onFatalError)
+	c.tcpClient.WithMessageCallbackChan(c.tcpMessageCh)
+
+	c.retryBackoff.Reset()
 
 	if err := c.lifecycleData.Start(); err != nil {
 		return err

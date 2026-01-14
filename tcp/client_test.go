@@ -20,7 +20,12 @@ import (
 )
 
 func TestTcpClient(t *testing.T) {
-	client := newTCPClient("demo.ctraderapi.com:5035")
+	errCh := make(chan error)
+	onFatalErr := func(err error) {
+		errCh <- err
+	}
+
+	client := newTCPClient("demo.ctraderapi.com:5035", onFatalErr)
 
 	// Test setting timeout
 	timeout := 5 * time.Second
@@ -39,10 +44,20 @@ func TestTcpClient(t *testing.T) {
 	if !client.useTLS || client.tlsConfig == nil {
 		t.Error("Expected TLS to be enabled with a valid config")
 	}
+
+	close(errCh)
+	if err := <-errCh; err != nil {
+		t.Errorf("Unexpected fatal error: %v", err)
+	}
 }
 
 func TestTcpClientConn(t *testing.T) {
-	client := newTCPClient("demo.ctraderapi.com:5035")
+	errCh := make(chan error)
+	onFatalErr := func(err error) {
+		errCh <- err
+	}
+
+	client := newTCPClient("demo.ctraderapi.com:5035", onFatalErr)
 
 	// Test setting timeout
 	timeout := 5 * time.Second
@@ -75,5 +90,10 @@ func TestTcpClientConn(t *testing.T) {
 	err = client.CloseConn()
 	if err != nil {
 		t.Errorf("Error closing connection: %v", err)
+	}
+
+	close(errCh)
+	if err := <-errCh; err != nil {
+		t.Errorf("Unexpected fatal error: %v", err)
 	}
 }

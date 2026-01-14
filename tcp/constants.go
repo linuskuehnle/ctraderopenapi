@@ -23,8 +23,3 @@ const (
 	DefaultReconnectTimeout = 1 * time.Second
 	DefaultMaxReconnects    = 0 // 0 means infinite reconnect attempts
 )
-
-var (
-	DefaultReconnectBackoffLadder   = []time.Duration{1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second}
-	DefaultReconnectBackoffStepDown = 30 * time.Second
-)

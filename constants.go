@@ -83,6 +83,11 @@ var rateLimitTypeByReqType = map[ProtoOAPayloadType]rateLimitType{
 	PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ:  rateLimitType_Live,
 }
 
+var (
+	DefaultReconnectBackoffLadder   = []time.Duration{1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second}
+	DefaultReconnectBackoffStepDown = 30 * time.Second
+)
+
 const (
 	// EndpointAddress represents the cTrader OpenAPI server address.
 
