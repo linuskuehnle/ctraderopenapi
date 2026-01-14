@@ -23,6 +23,8 @@ import (
 )
 
 type RetryBackoff interface {
+	Reset()
+
 	Backoff()
 	WaitForPermit(context.Context) bool
 }
@@ -56,13 +58,6 @@ func NewRetryBackoff(ladder []time.Duration, stepDownAfter time.Duration) (Retry
 		prev = d
 	}
 
-	if ladder[len(ladder)-1] >= stepDownAfter {
-		return nil, &FunctionInvalidArgError{
-			FunctionName: "NewRetryBackoff",
-			Err:          fmt.Errorf("stepDownAfter duration must be bigger than the last ladder step duration"),
-		}
-	}
-
 	return newRetryBackoff(ladder, stepDownAfter), nil
 }
 
@@ -78,6 +73,14 @@ func newRetryBackoff(ladder []time.Duration, stepDownAfter time.Duration) *retry
 
 		gateTime: time.Now(),
 	}
+}
+
+func (d *retryBackoff) Reset() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.gateTime = time.Now()
+	d.ladderStep = 0
 }
 
 func (b *retryBackoff) WaitForPermit(ctx context.Context) bool {

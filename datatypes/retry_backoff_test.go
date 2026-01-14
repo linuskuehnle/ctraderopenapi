@@ -30,11 +30,6 @@ func TestRetryBackoffInvalidArgs(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for non-monotonic ladder")
 	}
-
-	_, err = NewRetryBackoff([]time.Duration{time.Second, time.Second * 2, time.Second * 5}, time.Second*4)
-	if err == nil {
-		t.Fatalf("expected error for stepDownAfter less than highest ladder duration")
-	}
 }
 
 func TestRetryBackoffSequences(t *testing.T) {
