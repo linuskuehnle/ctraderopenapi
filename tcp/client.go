@@ -552,9 +552,7 @@ func (c *tcpClient) handleInputStream(ctx context.Context) {
 				}
 
 				// Reconnect successful
-				if c.onReconnectSuccess != nil {
-					c.onReconnectSuccess()
-				}
+				c.handleReconnectSuccess()
 			}
 
 			if payload != nil && c.messageHandling != nil {
@@ -629,5 +627,16 @@ func (c *tcpClient) handleReconnectFail(err error) {
 		c.onReconnectFail(err)
 	} else {
 		go c.messageHandling.onMessageError(err)
+	}
+}
+
+func (c *tcpClient) handleReconnectSuccess() {
+	// Reset backoff on successful reconnect
+	if c.reconnectBackoff != nil {
+		c.reconnectBackoff.Reset()
+	}
+
+	if c.onReconnectSuccess != nil {
+		c.onReconnectSuccess()
 	}
 }
