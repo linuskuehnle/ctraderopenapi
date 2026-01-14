@@ -56,7 +56,6 @@ func splitAddress(address string) (string, string, error) {
 }
 
 // isNetworkFatal determines whether an error means the connection is lost
-// and should trigger a reconnection attempt.
 func isNetworkFatal(err error) bool {
 	if err == nil {
 		return false
