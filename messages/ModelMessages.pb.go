@@ -7,11 +7,12 @@
 package messages
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -113,12 +114,6 @@ const (
 	ProtoOAPayloadType_PROTO_OA_DEAL_OFFSET_LIST_RES             ProtoOAPayloadType = 2186
 	ProtoOAPayloadType_PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ  ProtoOAPayloadType = 2187
 	ProtoOAPayloadType_PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES  ProtoOAPayloadType = 2188
-	// manually added due to inconsitency in provided files:
-	ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_EVENT            ProtoOAPayloadType = 4096
-	ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_REQ    ProtoOAPayloadType = 4097
-	ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_RES    ProtoOAPayloadType = 4098
-	ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_REQ ProtoOAPayloadType = 4099
-	ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_RES ProtoOAPayloadType = 4100
 )
 
 // Enum value maps for ProtoOAPayloadType.
@@ -213,11 +208,6 @@ var (
 		2186: "PROTO_OA_DEAL_OFFSET_LIST_RES",
 		2187: "PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ",
 		2188: "PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES",
-		4096: "PROTO_OA_V1_PNL_CHANGE_EVENT",
-		4097: "PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_REQ",
-		4098: "PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_RES",
-		4099: "PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_REQ",
-		4100: "PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_RES",
 	}
 	ProtoOAPayloadType_value = map[string]int32{
 		"PROTO_OA_APPLICATION_AUTH_REQ":             2100,
@@ -309,11 +299,6 @@ var (
 		"PROTO_OA_DEAL_OFFSET_LIST_RES":             2186,
 		"PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ":  2187,
 		"PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES":  2188,
-		"PROTO_OA_V1_PNL_CHANGE_EVENT":              4096,
-		"PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_REQ":      4097,
-		"PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_RES":      4098,
-		"PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_REQ":   4099,
-		"PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_RES":   4100,
 	}
 )
 
@@ -1232,7 +1217,7 @@ func (ProtoOAOrderStatus) EnumDescriptor() ([]byte, []int) {
 	return file_ModelMessages_proto_rawDescGZIP(), []int{14}
 }
 
-// * Stop Order and Stop Lost triggering method ENUM.
+// * Stop Order and Stop Loss triggering method ENUM.
 type ProtoOAOrderTriggerMethod int32
 
 const (
@@ -1979,7 +1964,6 @@ const (
 	ProtoOAErrorCode_UNABLE_TO_CANCEL_ORDER            ProtoOAErrorCode = 134 // Unable to cancel order.
 	ProtoOAErrorCode_UNABLE_TO_AMEND_ORDER             ProtoOAErrorCode = 135 // Unable to amend order.
 	ProtoOAErrorCode_SHORT_SELLING_NOT_ALLOWED         ProtoOAErrorCode = 136 // Short selling is not allowed.
-	ProtoOAErrorCode_NOT_SUBSCRIBED_TO_PNL             ProtoOAErrorCode = 137 //This session is not subscribed via ProtoOAv1PnLChangeSubscribeReq
 )
 
 // Enum value maps for ProtoOAErrorCode.
@@ -2028,7 +2012,6 @@ var (
 		134: "UNABLE_TO_CANCEL_ORDER",
 		135: "UNABLE_TO_AMEND_ORDER",
 		136: "SHORT_SELLING_NOT_ALLOWED",
-		137: "NOT_SUBSCRIBED_TO_PNL",
 	}
 	ProtoOAErrorCode_value = map[string]int32{
 		"OA_AUTH_TOKEN_EXPIRED":             1,
@@ -2074,7 +2057,6 @@ var (
 		"UNABLE_TO_CANCEL_ORDER":            134,
 		"UNABLE_TO_AMEND_ORDER":             135,
 		"SHORT_SELLING_NOT_ALLOWED":         136,
-		"NOT_SUBSCRIBED_TO_PNL":             137,
 	}
 )
 
@@ -5392,7 +5374,7 @@ const file_ModelMessages_proto_rawDesc = "" +
 	"positionId\x18\x01 \x02(\x03R\n" +
 	"positionId\x12.\n" +
 	"\x12grossUnrealizedPnL\x18\x02 \x02(\x03R\x12grossUnrealizedPnL\x12*\n" +
-	"\x10netUnrealizedPnL\x18\x03 \x02(\x03R\x10netUnrealizedPnL*\x86\x1b\n" +
+	"\x10netUnrealizedPnL\x18\x03 \x02(\x03R\x10netUnrealizedPnL*\xb1\x19\n" +
 	"\x12ProtoOAPayloadType\x12\"\n" +
 	"\x1dPROTO_OA_APPLICATION_AUTH_REQ\x10\xb4\x10\x12\"\n" +
 	"\x1dPROTO_OA_APPLICATION_AUTH_RES\x10\xb5\x10\x12\x1e\n" +
@@ -5482,12 +5464,7 @@ const file_ModelMessages_proto_rawDesc = "" +
 	"\x1dPROTO_OA_DEAL_OFFSET_LIST_REQ\x10\x89\x11\x12\"\n" +
 	"\x1dPROTO_OA_DEAL_OFFSET_LIST_RES\x10\x8a\x11\x12-\n" +
 	"(PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ\x10\x8b\x11\x12-\n" +
-	"(PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES\x10\x8c\x11\x12!\n" +
-	"\x1cPROTO_OA_V1_PNL_CHANGE_EVENT\x10\x80 \x12)\n" +
-	"$PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_REQ\x10\x81 \x12)\n" +
-	"$PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_RES\x10\x82 \x12,\n" +
-	"'PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_REQ\x10\x83 \x12,\n" +
-	"'PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_RES\x10\x84 *x\n" +
+	"(PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES\x10\x8c\x11*x\n" +
 	"\x10ProtoOADayOfWeek\x12\b\n" +
 	"\x04NONE\x10\x00\x12\n" +
 	"\n" +
@@ -5662,7 +5639,7 @@ const file_ModelMessages_proto_rawDesc = "" +
 	"\x17ProtoOANotificationType\x12\x1c\n" +
 	"\x18MARGIN_LEVEL_THRESHOLD_1\x10=\x12\x1c\n" +
 	"\x18MARGIN_LEVEL_THRESHOLD_2\x10>\x12\x1c\n" +
-	"\x18MARGIN_LEVEL_THRESHOLD_3\x10?*\xab\t\n" +
+	"\x18MARGIN_LEVEL_THRESHOLD_3\x10?*\x8f\t\n" +
 	"\x10ProtoOAErrorCode\x12\x19\n" +
 	"\x15OA_AUTH_TOKEN_EXPIRED\x10\x01\x12\x1a\n" +
 	"\x16ACCOUNT_NOT_AUTHORIZED\x10\x02\x12\x15\n" +
@@ -5706,8 +5683,7 @@ const file_ModelMessages_proto_rawDesc = "" +
 	"\x13TRADING_NOT_ALLOWED\x10\x85\x01\x12\x1b\n" +
 	"\x16UNABLE_TO_CANCEL_ORDER\x10\x86\x01\x12\x1a\n" +
 	"\x15UNABLE_TO_AMEND_ORDER\x10\x87\x01\x12\x1e\n" +
-	"\x19SHORT_SELLING_NOT_ALLOWED\x10\x88\x01\x12\x1a\n" +
-	"\x15NOT_SUBSCRIBED_TO_PNL\x10\x89\x01*\x81\x01\n" +
+	"\x19SHORT_SELLING_NOT_ALLOWED\x10\x88\x01*\x81\x01\n" +
 	"+ProtoOALimitedRiskMarginCalculationStrategy\x12\x19\n" +
 	"\x15ACCORDING_TO_LEVERAGE\x10\x00\x12\x14\n" +
 	"\x10ACCORDING_TO_GSL\x10\x01\x12!\n" +

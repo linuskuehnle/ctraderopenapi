@@ -597,8 +597,8 @@ type ProtoOANewOrderReq struct {
 	StopPrice           *float64                   `protobuf:"fixed64,8,opt,name=stopPrice" json:"stopPrice,omitempty"`                                                      // Stop Price, can be specified for the STOP and the STOP_LIMIT orders only.
 	TimeInForce         *ProtoOATimeInForce        `protobuf:"varint,9,opt,name=timeInForce,enum=ProtoOATimeInForce,def=2" json:"timeInForce,omitempty"`                     // The specific order execution or expiration instruction - GOOD_TILL_DATE, GOOD_TILL_CANCEL, IMMEDIATE_OR_CANCEL, FILL_OR_KILL, MARKET_ON_OPEN.
 	ExpirationTimestamp *int64                     `protobuf:"varint,10,opt,name=expirationTimestamp" json:"expirationTimestamp,omitempty"`                                  // The Unix time in milliseconds of Order expiration. Should be set for the Good Till Date orders.
-	StopLoss            *float64                   `protobuf:"fixed64,11,opt,name=stopLoss" json:"stopLoss,omitempty"`                                                       // The absolute Stop Loss price (1.23456 for example). Not supported for the MARKER orders.
-	TakeProfit          *float64                   `protobuf:"fixed64,12,opt,name=takeProfit" json:"takeProfit,omitempty"`                                                   // The absolute Take Profit price (1.23456 for example). Unsupported for the MARKER orders.
+	StopLoss            *float64                   `protobuf:"fixed64,11,opt,name=stopLoss" json:"stopLoss,omitempty"`                                                       // The absolute Stop Loss price (1.23456 for example). Not supported for MARKET orders.
+	TakeProfit          *float64                   `protobuf:"fixed64,12,opt,name=takeProfit" json:"takeProfit,omitempty"`                                                   // The absolute Take Profit price (1.23456 for example). Unsupported for MARKET orders.
 	Comment             *string                    `protobuf:"bytes,13,opt,name=comment" json:"comment,omitempty"`                                                           // User-specified comment. MaxLength = 512.
 	BaseSlippagePrice   *float64                   `protobuf:"fixed64,14,opt,name=baseSlippagePrice" json:"baseSlippagePrice,omitempty"`                                     // Base price to calculate relative slippage price for MARKET_RANGE order.
 	SlippageInPoints    *int32                     `protobuf:"varint,15,opt,name=slippageInPoints" json:"slippageInPoints,omitempty"`                                        // Slippage distance for MARKET_RANGE and STOP_LIMIT order.
@@ -1010,8 +1010,8 @@ type ProtoOAAmendOrderReq struct {
 	LimitPrice          *float64                   `protobuf:"fixed64,5,opt,name=limitPrice" json:"limitPrice,omitempty"`                                                    // The Limit Price, can be specified for the LIMIT order only.
 	StopPrice           *float64                   `protobuf:"fixed64,6,opt,name=stopPrice" json:"stopPrice,omitempty"`                                                      // The Stop Price, can be specified for the STOP and the STOP_LIMIT orders.
 	ExpirationTimestamp *int64                     `protobuf:"varint,7,opt,name=expirationTimestamp" json:"expirationTimestamp,omitempty"`                                   // The Unix timestamp in milliseconds of Order expiration. Should be set for the Good Till Date orders.
-	StopLoss            *float64                   `protobuf:"fixed64,8,opt,name=stopLoss" json:"stopLoss,omitempty"`                                                        // The absolute Stop Loss price (e.g. 1.23456). Not supported for the MARKER orders.
-	TakeProfit          *float64                   `protobuf:"fixed64,9,opt,name=takeProfit" json:"takeProfit,omitempty"`                                                    // The absolute Take Profit price (e.g. 1.23456). Not supported for the MARKER orders.
+	StopLoss            *float64                   `protobuf:"fixed64,8,opt,name=stopLoss" json:"stopLoss,omitempty"`                                                        // The absolute Stop Loss price (e.g. 1.23456). Not supported for MARKET orders.
+	TakeProfit          *float64                   `protobuf:"fixed64,9,opt,name=takeProfit" json:"takeProfit,omitempty"`                                                    // The absolute Take Profit price (e.g. 1.23456). Not supported for MARKET orders.
 	SlippageInPoints    *int32                     `protobuf:"varint,10,opt,name=slippageInPoints" json:"slippageInPoints,omitempty"`                                        // Slippage distance for the MARKET_RANGE and the STOP_LIMIT orders.
 	RelativeStopLoss    *int64                     `protobuf:"varint,11,opt,name=relativeStopLoss" json:"relativeStopLoss,omitempty"`                                        // The relative Stop Loss can be specified instead of the absolute one. Specified in 1/100000 of a unit of price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782) For BUY stopLoss = entryPrice - relativeStopLoss, for SELL stopLoss = entryPrice + relativeStopLoss.
 	RelativeTakeProfit  *int64                     `protobuf:"varint,12,opt,name=relativeTakeProfit" json:"relativeTakeProfit,omitempty"`                                    // The relative Take Profit can be specified instead of the absolute one. Specified in 1/100000 of a unit of price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782) For BUY takeProfit = entryPrice + relativeTakeProfit, for SELL takeProfit = entryPrice - relativeTakeProfit.
@@ -5151,7 +5151,7 @@ func (x *ProtoOAAccountLogoutReq) GetCtidTraderAccountId() int64 {
 	return 0
 }
 
-// * Response to the ProtoOATraderLogoutReq request. Actual logout of trading account will be completed on ProtoOAAccountDisconnectEvent.
+// * Response to the ProtoOAAccountLogoutReq request. Actual logout of trading account will be completed on ProtoOAAccountDisconnectEvent.
 type ProtoOAAccountLogoutRes struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PayloadType         *ProtoOAPayloadType    `protobuf:"varint,1,opt,name=payloadType,enum=ProtoOAPayloadType,def=2163" json:"payloadType,omitempty"`
@@ -6487,320 +6487,6 @@ func (x *ProtoOAGetPositionUnrealizedPnLRes) GetMoneyDigits() uint32 {
 	return 0
 }
 
-// The event that is sent when the unrealized PnL is changed due to market movement. Requires subscribing to PnL events, see ProtoOAv1PnLChangeSubscribeReq
-type ProtoOAv1PnLChangeEvent struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	PayloadType         *ProtoOAPayloadType    `protobuf:"varint,1,opt,name=payloadType,enum=ProtoOAPayloadType,def=4096" json:"payloadType,omitempty"`
-	CtidTraderAccountId *int64                 `protobuf:"varint,2,req,name=ctidTraderAccountId" json:"ctidTraderAccountId,omitempty"` //Unique identifier of the trader's account. Used to match responses to trader's accounts.
-	GrossUnrealizedPnL  *int64                 `protobuf:"varint,3,req,name=grossUnrealizedPnL" json:"grossUnrealizedPnL,omitempty"`   //The gross unrealized PnL denoted in the account deposit currency
-	NetUnrealizedPnL    *int64                 `protobuf:"varint,4,req,name=netUnrealizedPnL" json:"netUnrealizedPnL,omitempty"`       //The net unrealized PnL denoted in the account deposit currency
-	MoneyDigits         *uint32                `protobuf:"varint,5,req,name=moneyDigits" json:"moneyDigits,omitempty"`                 //Specifies the exponent of various monetary values. E.g., moneyDigits = 8 should be interpreted as the value multiplied by 10^8 with the 'real' value equal to 10053099944 / 10^8 = 100.53099944
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-// Default values for ProtoOAv1PnLChangeEvent fields.
-const (
-	Default_ProtoOAv1PnLChangeEvent_PayloadType = ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_EVENT
-)
-
-func (x *ProtoOAv1PnLChangeEvent) Reset() {
-	*x = ProtoOAv1PnLChangeEvent{}
-	mi := &file_Messages_proto_msgTypes[89]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoOAv1PnLChangeEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoOAv1PnLChangeEvent) ProtoMessage() {}
-
-func (x *ProtoOAv1PnLChangeEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_Messages_proto_msgTypes[89]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoOAv1PnLChangeEvent.ProtoReflect.Descriptor instead.
-func (*ProtoOAv1PnLChangeEvent) Descriptor() ([]byte, []int) {
-	return file_Messages_proto_rawDescGZIP(), []int{89}
-}
-
-func (x *ProtoOAv1PnLChangeEvent) GetPayloadType() ProtoOAPayloadType {
-	if x != nil && x.PayloadType != nil {
-		return *x.PayloadType
-	}
-	return Default_ProtoOAv1PnLChangeEvent_PayloadType
-}
-
-func (x *ProtoOAv1PnLChangeEvent) GetCtidTraderAccountId() int64 {
-	if x != nil && x.CtidTraderAccountId != nil {
-		return *x.CtidTraderAccountId
-	}
-	return 0
-}
-
-func (x *ProtoOAv1PnLChangeEvent) GetGrossUnrealizedPnL() int64 {
-	if x != nil && x.GrossUnrealizedPnL != nil {
-		return *x.GrossUnrealizedPnL
-	}
-	return 0
-}
-
-func (x *ProtoOAv1PnLChangeEvent) GetNetUnrealizedPnL() int64 {
-	if x != nil && x.NetUnrealizedPnL != nil {
-		return *x.NetUnrealizedPnL
-	}
-	return 0
-}
-
-func (x *ProtoOAv1PnLChangeEvent) GetMoneyDigits() uint32 {
-	if x != nil && x.MoneyDigits != nil {
-		return *x.MoneyDigits
-	}
-	return 0
-}
-
-// The request to subscribe to ProtoOAv1PnLChangeEvent
-type ProtoOAv1PnLChangeSubscribeReq struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	PayloadType         *ProtoOAPayloadType    `protobuf:"varint,1,opt,name=payloadType,enum=ProtoOAPayloadType,def=4097" json:"payloadType,omitempty"`
-	CtidTraderAccountId *int64                 `protobuf:"varint,2,req,name=ctidTraderAccountId" json:"ctidTraderAccountId,omitempty"` //Unique identifier of the trader's account. Used to match responses to trader's accounts.
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-// Default values for ProtoOAv1PnLChangeSubscribeReq fields.
-const (
-	Default_ProtoOAv1PnLChangeSubscribeReq_PayloadType = ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_REQ
-)
-
-func (x *ProtoOAv1PnLChangeSubscribeReq) Reset() {
-	*x = ProtoOAv1PnLChangeSubscribeReq{}
-	mi := &file_Messages_proto_msgTypes[90]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoOAv1PnLChangeSubscribeReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoOAv1PnLChangeSubscribeReq) ProtoMessage() {}
-
-func (x *ProtoOAv1PnLChangeSubscribeReq) ProtoReflect() protoreflect.Message {
-	mi := &file_Messages_proto_msgTypes[90]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoOAv1PnLChangeSubscribeReq.ProtoReflect.Descriptor instead.
-func (*ProtoOAv1PnLChangeSubscribeReq) Descriptor() ([]byte, []int) {
-	return file_Messages_proto_rawDescGZIP(), []int{90}
-}
-
-func (x *ProtoOAv1PnLChangeSubscribeReq) GetPayloadType() ProtoOAPayloadType {
-	if x != nil && x.PayloadType != nil {
-		return *x.PayloadType
-	}
-	return Default_ProtoOAv1PnLChangeSubscribeReq_PayloadType
-}
-
-func (x *ProtoOAv1PnLChangeSubscribeReq) GetCtidTraderAccountId() int64 {
-	if x != nil && x.CtidTraderAccountId != nil {
-		return *x.CtidTraderAccountId
-	}
-	return 0
-}
-
-// The response for ProtoOAv1PnLChangeSubscribeReq
-type ProtoOAv1PnLChangeSubscribeRes struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	PayloadType         *ProtoOAPayloadType    `protobuf:"varint,1,opt,name=payloadType,enum=ProtoOAPayloadType,def=4098" json:"payloadType,omitempty"`
-	CtidTraderAccountId *int64                 `protobuf:"varint,2,req,name=ctidTraderAccountId" json:"ctidTraderAccountId,omitempty"` // The unique identifier of the trader's account in cTrader platform.
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-// Default values for ProtoOAv1PnLChangeSubscribeRes fields.
-const (
-	Default_ProtoOAv1PnLChangeSubscribeRes_PayloadType = ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_RES
-)
-
-func (x *ProtoOAv1PnLChangeSubscribeRes) Reset() {
-	*x = ProtoOAv1PnLChangeSubscribeRes{}
-	mi := &file_Messages_proto_msgTypes[91]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoOAv1PnLChangeSubscribeRes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoOAv1PnLChangeSubscribeRes) ProtoMessage() {}
-
-func (x *ProtoOAv1PnLChangeSubscribeRes) ProtoReflect() protoreflect.Message {
-	mi := &file_Messages_proto_msgTypes[91]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoOAv1PnLChangeSubscribeRes.ProtoReflect.Descriptor instead.
-func (*ProtoOAv1PnLChangeSubscribeRes) Descriptor() ([]byte, []int) {
-	return file_Messages_proto_rawDescGZIP(), []int{91}
-}
-
-func (x *ProtoOAv1PnLChangeSubscribeRes) GetPayloadType() ProtoOAPayloadType {
-	if x != nil && x.PayloadType != nil {
-		return *x.PayloadType
-	}
-	return Default_ProtoOAv1PnLChangeSubscribeRes_PayloadType
-}
-
-func (x *ProtoOAv1PnLChangeSubscribeRes) GetCtidTraderAccountId() int64 {
-	if x != nil && x.CtidTraderAccountId != nil {
-		return *x.CtidTraderAccountId
-	}
-	return 0
-}
-
-// The request to stop an existing subscription to PnL events. The subscriber who sends this request will stop receiving ProtoOAv1PnLChangeEvent
-type ProtoOAv1PnLChangeUnSubscribeReq struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	PayloadType         *ProtoOAPayloadType    `protobuf:"varint,1,opt,name=payloadType,enum=ProtoOAPayloadType,def=4099" json:"payloadType,omitempty"`
-	CtidTraderAccountId *int64                 `protobuf:"varint,2,req,name=ctidTraderAccountId" json:"ctidTraderAccountId,omitempty"` //Unique identifier of the trader's account. Used to match responses to trader's accounts.
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-// Default values for ProtoOAv1PnLChangeUnSubscribeReq fields.
-const (
-	Default_ProtoOAv1PnLChangeUnSubscribeReq_PayloadType = ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_REQ
-)
-
-func (x *ProtoOAv1PnLChangeUnSubscribeReq) Reset() {
-	*x = ProtoOAv1PnLChangeUnSubscribeReq{}
-	mi := &file_Messages_proto_msgTypes[92]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoOAv1PnLChangeUnSubscribeReq) ProtoMessage() {}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeReq) ProtoReflect() protoreflect.Message {
-	mi := &file_Messages_proto_msgTypes[92]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoOAv1PnLChangeUnSubscribeReq.ProtoReflect.Descriptor instead.
-func (*ProtoOAv1PnLChangeUnSubscribeReq) Descriptor() ([]byte, []int) {
-	return file_Messages_proto_rawDescGZIP(), []int{92}
-}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeReq) GetPayloadType() ProtoOAPayloadType {
-	if x != nil && x.PayloadType != nil {
-		return *x.PayloadType
-	}
-	return Default_ProtoOAv1PnLChangeUnSubscribeReq_PayloadType
-}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeReq) GetCtidTraderAccountId() int64 {
-	if x != nil && x.CtidTraderAccountId != nil {
-		return *x.CtidTraderAccountId
-	}
-	return 0
-}
-
-// The response for ProtoOAv1PnLChangeUnSubscribeReq
-type ProtoOAv1PnLChangeUnSubscribeRes struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	PayloadType         *ProtoOAPayloadType    `protobuf:"varint,1,opt,name=payloadType,enum=ProtoOAPayloadType,def=4100" json:"payloadType,omitempty"`
-	CtidTraderAccountId *int64                 `protobuf:"varint,2,req,name=ctidTraderAccountId" json:"ctidTraderAccountId,omitempty"` //Unique identifier of the trader's account. Used to match responses to trader's accounts.
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-// Default values for ProtoOAv1PnLChangeUnSubscribeRes fields.
-const (
-	Default_ProtoOAv1PnLChangeUnSubscribeRes_PayloadType = ProtoOAPayloadType_PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_RES
-)
-
-func (x *ProtoOAv1PnLChangeUnSubscribeRes) Reset() {
-	*x = ProtoOAv1PnLChangeUnSubscribeRes{}
-	mi := &file_Messages_proto_msgTypes[93]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeRes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoOAv1PnLChangeUnSubscribeRes) ProtoMessage() {}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeRes) ProtoReflect() protoreflect.Message {
-	mi := &file_Messages_proto_msgTypes[93]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoOAv1PnLChangeUnSubscribeRes.ProtoReflect.Descriptor instead.
-func (*ProtoOAv1PnLChangeUnSubscribeRes) Descriptor() ([]byte, []int) {
-	return file_Messages_proto_rawDescGZIP(), []int{93}
-}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeRes) GetPayloadType() ProtoOAPayloadType {
-	if x != nil && x.PayloadType != nil {
-		return *x.PayloadType
-	}
-	return Default_ProtoOAv1PnLChangeUnSubscribeRes_PayloadType
-}
-
-func (x *ProtoOAv1PnLChangeUnSubscribeRes) GetCtidTraderAccountId() int64 {
-	if x != nil && x.CtidTraderAccountId != nil {
-		return *x.CtidTraderAccountId
-	}
-	return 0
-}
-
 var File_Messages_proto protoreflect.FileDescriptor
 
 const file_Messages_proto_rawDesc = "" +
@@ -7281,25 +6967,7 @@ const file_Messages_proto_rawDesc = "" +
 	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:(PROTO_OA_GET_POSITION_UNREALIZED_PNL_RESR\vpayloadType\x120\n" +
 	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\x12S\n" +
 	"\x15positionUnrealizedPnL\x18\x03 \x03(\v2\x1d.ProtoOAPositionUnrealizedPnLR\x15positionUnrealizedPnL\x12 \n" +
-	"\vmoneyDigits\x18\x04 \x02(\rR\vmoneyDigits\"\x9e\x02\n" +
-	"\x17ProtoOAv1PnLChangeEvent\x12S\n" +
-	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:\x1cPROTO_OA_V1_PNL_CHANGE_EVENTR\vpayloadType\x120\n" +
-	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\x12.\n" +
-	"\x12grossUnrealizedPnL\x18\x03 \x02(\x03R\x12grossUnrealizedPnL\x12*\n" +
-	"\x10netUnrealizedPnL\x18\x04 \x02(\x03R\x10netUnrealizedPnL\x12 \n" +
-	"\vmoneyDigits\x18\x05 \x02(\rR\vmoneyDigits\"\xaf\x01\n" +
-	"\x1eProtoOAv1PnLChangeSubscribeReq\x12[\n" +
-	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:$PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_REQR\vpayloadType\x120\n" +
-	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\"\xaf\x01\n" +
-	"\x1eProtoOAv1PnLChangeSubscribeRes\x12[\n" +
-	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:$PROTO_OA_V1_PNL_CHANGE_SUBSCRIBE_RESR\vpayloadType\x120\n" +
-	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\"\xb4\x01\n" +
-	" ProtoOAv1PnLChangeUnSubscribeReq\x12^\n" +
-	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:'PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_REQR\vpayloadType\x120\n" +
-	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\"\xb4\x01\n" +
-	" ProtoOAv1PnLChangeUnSubscribeRes\x12^\n" +
-	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:'PROTO_OA_V1_PNL_CHANGE_UN_SUBSCRIBE_RESR\vpayloadType\x120\n" +
-	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountIdB\x1aZ\x18ctrader-openapi/messages"
+	"\vmoneyDigits\x18\x04 \x02(\rR\vmoneyDigitsB\x1aZ\x18ctrader-openapi/messages"
 
 var (
 	file_Messages_proto_rawDescOnce sync.Once
@@ -7313,7 +6981,7 @@ func file_Messages_proto_rawDescGZIP() []byte {
 	return file_Messages_proto_rawDescData
 }
 
-var file_Messages_proto_msgTypes = make([]protoimpl.MessageInfo, 94)
+var file_Messages_proto_msgTypes = make([]protoimpl.MessageInfo, 89)
 var file_Messages_proto_goTypes = []any{
 	(*ProtoOAApplicationAuthReq)(nil),             // 0: ProtoOAApplicationAuthReq
 	(*ProtoOAApplicationAuthRes)(nil),             // 1: ProtoOAApplicationAuthRes
@@ -7404,195 +7072,185 @@ var file_Messages_proto_goTypes = []any{
 	(*ProtoOADealOffsetListRes)(nil),              // 86: ProtoOADealOffsetListRes
 	(*ProtoOAGetPositionUnrealizedPnLReq)(nil),    // 87: ProtoOAGetPositionUnrealizedPnLReq
 	(*ProtoOAGetPositionUnrealizedPnLRes)(nil),    // 88: ProtoOAGetPositionUnrealizedPnLRes
-	(*ProtoOAv1PnLChangeEvent)(nil),               // 89: ProtoOAv1PnLChangeEvent
-	(*ProtoOAv1PnLChangeSubscribeReq)(nil),        // 90: ProtoOAv1PnLChangeSubscribeReq
-	(*ProtoOAv1PnLChangeSubscribeRes)(nil),        // 91: ProtoOAv1PnLChangeSubscribeRes
-	(*ProtoOAv1PnLChangeUnSubscribeReq)(nil),      // 92: ProtoOAv1PnLChangeUnSubscribeReq
-	(*ProtoOAv1PnLChangeUnSubscribeRes)(nil),      // 93: ProtoOAv1PnLChangeUnSubscribeRes
-	(ProtoOAPayloadType)(0),                       // 94: ProtoOAPayloadType
-	(ProtoOAOrderType)(0),                         // 95: ProtoOAOrderType
-	(ProtoOATradeSide)(0),                         // 96: ProtoOATradeSide
-	(ProtoOATimeInForce)(0),                       // 97: ProtoOATimeInForce
-	(ProtoOAOrderTriggerMethod)(0),                // 98: ProtoOAOrderTriggerMethod
-	(ProtoOAExecutionType)(0),                     // 99: ProtoOAExecutionType
-	(*ProtoOAPosition)(nil),                       // 100: ProtoOAPosition
-	(*ProtoOAOrder)(nil),                          // 101: ProtoOAOrder
-	(*ProtoOADeal)(nil),                           // 102: ProtoOADeal
-	(*ProtoOABonusDepositWithdraw)(nil),           // 103: ProtoOABonusDepositWithdraw
-	(*ProtoOADepositWithdraw)(nil),                // 104: ProtoOADepositWithdraw
-	(*ProtoOAAsset)(nil),                          // 105: ProtoOAAsset
-	(*ProtoOALightSymbol)(nil),                    // 106: ProtoOALightSymbol
-	(*ProtoOAArchivedSymbol)(nil),                 // 107: ProtoOAArchivedSymbol
-	(*ProtoOASymbol)(nil),                         // 108: ProtoOASymbol
-	(*ProtoOAAssetClass)(nil),                     // 109: ProtoOAAssetClass
-	(*ProtoOATrader)(nil),                         // 110: ProtoOATrader
-	(*ProtoOAExpectedMargin)(nil),                 // 111: ProtoOAExpectedMargin
-	(ProtoOAClientPermissionScope)(0),             // 112: ProtoOAClientPermissionScope
-	(*ProtoOACtidTraderAccount)(nil),              // 113: ProtoOACtidTraderAccount
-	(*ProtoOATrendbar)(nil),                       // 114: ProtoOATrendbar
-	(ProtoOATrendbarPeriod)(0),                    // 115: ProtoOATrendbarPeriod
-	(ProtoOAQuoteType)(0),                         // 116: ProtoOAQuoteType
-	(*ProtoOATickData)(nil),                       // 117: ProtoOATickData
-	(*ProtoOACtidProfile)(nil),                    // 118: ProtoOACtidProfile
-	(*ProtoOADepthQuote)(nil),                     // 119: ProtoOADepthQuote
-	(*ProtoOASymbolCategory)(nil),                 // 120: ProtoOASymbolCategory
-	(*ProtoOAMarginCall)(nil),                     // 121: ProtoOAMarginCall
-	(*ProtoOADynamicLeverage)(nil),                // 122: ProtoOADynamicLeverage
-	(*ProtoOADealOffset)(nil),                     // 123: ProtoOADealOffset
-	(*ProtoOAPositionUnrealizedPnL)(nil),          // 124: ProtoOAPositionUnrealizedPnL
+	(ProtoOAPayloadType)(0),                       // 89: ProtoOAPayloadType
+	(ProtoOAOrderType)(0),                         // 90: ProtoOAOrderType
+	(ProtoOATradeSide)(0),                         // 91: ProtoOATradeSide
+	(ProtoOATimeInForce)(0),                       // 92: ProtoOATimeInForce
+	(ProtoOAOrderTriggerMethod)(0),                // 93: ProtoOAOrderTriggerMethod
+	(ProtoOAExecutionType)(0),                     // 94: ProtoOAExecutionType
+	(*ProtoOAPosition)(nil),                       // 95: ProtoOAPosition
+	(*ProtoOAOrder)(nil),                          // 96: ProtoOAOrder
+	(*ProtoOADeal)(nil),                           // 97: ProtoOADeal
+	(*ProtoOABonusDepositWithdraw)(nil),           // 98: ProtoOABonusDepositWithdraw
+	(*ProtoOADepositWithdraw)(nil),                // 99: ProtoOADepositWithdraw
+	(*ProtoOAAsset)(nil),                          // 100: ProtoOAAsset
+	(*ProtoOALightSymbol)(nil),                    // 101: ProtoOALightSymbol
+	(*ProtoOAArchivedSymbol)(nil),                 // 102: ProtoOAArchivedSymbol
+	(*ProtoOASymbol)(nil),                         // 103: ProtoOASymbol
+	(*ProtoOAAssetClass)(nil),                     // 104: ProtoOAAssetClass
+	(*ProtoOATrader)(nil),                         // 105: ProtoOATrader
+	(*ProtoOAExpectedMargin)(nil),                 // 106: ProtoOAExpectedMargin
+	(ProtoOAClientPermissionScope)(0),             // 107: ProtoOAClientPermissionScope
+	(*ProtoOACtidTraderAccount)(nil),              // 108: ProtoOACtidTraderAccount
+	(*ProtoOATrendbar)(nil),                       // 109: ProtoOATrendbar
+	(ProtoOATrendbarPeriod)(0),                    // 110: ProtoOATrendbarPeriod
+	(ProtoOAQuoteType)(0),                         // 111: ProtoOAQuoteType
+	(*ProtoOATickData)(nil),                       // 112: ProtoOATickData
+	(*ProtoOACtidProfile)(nil),                    // 113: ProtoOACtidProfile
+	(*ProtoOADepthQuote)(nil),                     // 114: ProtoOADepthQuote
+	(*ProtoOASymbolCategory)(nil),                 // 115: ProtoOASymbolCategory
+	(*ProtoOAMarginCall)(nil),                     // 116: ProtoOAMarginCall
+	(*ProtoOADynamicLeverage)(nil),                // 117: ProtoOADynamicLeverage
+	(*ProtoOADealOffset)(nil),                     // 118: ProtoOADealOffset
+	(*ProtoOAPositionUnrealizedPnL)(nil),          // 119: ProtoOAPositionUnrealizedPnL
 }
 var file_Messages_proto_depIdxs = []int32{
-	94,  // 0: ProtoOAApplicationAuthReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 1: ProtoOAApplicationAuthRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 2: ProtoOAAccountAuthReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 3: ProtoOAAccountAuthRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 4: ProtoOAErrorRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 5: ProtoOAClientDisconnectEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 6: ProtoOAAccountsTokenInvalidatedEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 7: ProtoOAVersionReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 8: ProtoOAVersionRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 9: ProtoOANewOrderReq.payloadType:type_name -> ProtoOAPayloadType
-	95,  // 10: ProtoOANewOrderReq.orderType:type_name -> ProtoOAOrderType
-	96,  // 11: ProtoOANewOrderReq.tradeSide:type_name -> ProtoOATradeSide
-	97,  // 12: ProtoOANewOrderReq.timeInForce:type_name -> ProtoOATimeInForce
-	98,  // 13: ProtoOANewOrderReq.stopTriggerMethod:type_name -> ProtoOAOrderTriggerMethod
-	94,  // 14: ProtoOAExecutionEvent.payloadType:type_name -> ProtoOAPayloadType
-	99,  // 15: ProtoOAExecutionEvent.executionType:type_name -> ProtoOAExecutionType
-	100, // 16: ProtoOAExecutionEvent.position:type_name -> ProtoOAPosition
-	101, // 17: ProtoOAExecutionEvent.order:type_name -> ProtoOAOrder
-	102, // 18: ProtoOAExecutionEvent.deal:type_name -> ProtoOADeal
-	103, // 19: ProtoOAExecutionEvent.bonusDepositWithdraw:type_name -> ProtoOABonusDepositWithdraw
-	104, // 20: ProtoOAExecutionEvent.depositWithdraw:type_name -> ProtoOADepositWithdraw
-	94,  // 21: ProtoOACancelOrderReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 22: ProtoOAAmendOrderReq.payloadType:type_name -> ProtoOAPayloadType
-	98,  // 23: ProtoOAAmendOrderReq.stopTriggerMethod:type_name -> ProtoOAOrderTriggerMethod
-	94,  // 24: ProtoOAAmendPositionSLTPReq.payloadType:type_name -> ProtoOAPayloadType
-	98,  // 25: ProtoOAAmendPositionSLTPReq.stopLossTriggerMethod:type_name -> ProtoOAOrderTriggerMethod
-	94,  // 26: ProtoOAClosePositionReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 27: ProtoOATrailingSLChangedEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 28: ProtoOAAssetListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 29: ProtoOAAssetListRes.payloadType:type_name -> ProtoOAPayloadType
-	105, // 30: ProtoOAAssetListRes.asset:type_name -> ProtoOAAsset
-	94,  // 31: ProtoOASymbolsListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 32: ProtoOASymbolsListRes.payloadType:type_name -> ProtoOAPayloadType
-	106, // 33: ProtoOASymbolsListRes.symbol:type_name -> ProtoOALightSymbol
-	107, // 34: ProtoOASymbolsListRes.archivedSymbol:type_name -> ProtoOAArchivedSymbol
-	94,  // 35: ProtoOASymbolByIdReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 36: ProtoOASymbolByIdRes.payloadType:type_name -> ProtoOAPayloadType
-	108, // 37: ProtoOASymbolByIdRes.symbol:type_name -> ProtoOASymbol
-	107, // 38: ProtoOASymbolByIdRes.archivedSymbol:type_name -> ProtoOAArchivedSymbol
-	94,  // 39: ProtoOASymbolsForConversionReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 40: ProtoOASymbolsForConversionRes.payloadType:type_name -> ProtoOAPayloadType
-	106, // 41: ProtoOASymbolsForConversionRes.symbol:type_name -> ProtoOALightSymbol
-	94,  // 42: ProtoOASymbolChangedEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 43: ProtoOAAssetClassListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 44: ProtoOAAssetClassListRes.payloadType:type_name -> ProtoOAPayloadType
-	109, // 45: ProtoOAAssetClassListRes.assetClass:type_name -> ProtoOAAssetClass
-	94,  // 46: ProtoOATraderReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 47: ProtoOATraderRes.payloadType:type_name -> ProtoOAPayloadType
-	110, // 48: ProtoOATraderRes.trader:type_name -> ProtoOATrader
-	94,  // 49: ProtoOATraderUpdatedEvent.payloadType:type_name -> ProtoOAPayloadType
-	110, // 50: ProtoOATraderUpdatedEvent.trader:type_name -> ProtoOATrader
-	94,  // 51: ProtoOAReconcileReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 52: ProtoOAReconcileRes.payloadType:type_name -> ProtoOAPayloadType
-	100, // 53: ProtoOAReconcileRes.position:type_name -> ProtoOAPosition
-	101, // 54: ProtoOAReconcileRes.order:type_name -> ProtoOAOrder
-	94,  // 55: ProtoOAOrderErrorEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 56: ProtoOADealListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 57: ProtoOADealListRes.payloadType:type_name -> ProtoOAPayloadType
-	102, // 58: ProtoOADealListRes.deal:type_name -> ProtoOADeal
-	94,  // 59: ProtoOAOrderListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 60: ProtoOAOrderListRes.payloadType:type_name -> ProtoOAPayloadType
-	101, // 61: ProtoOAOrderListRes.order:type_name -> ProtoOAOrder
-	94,  // 62: ProtoOAExpectedMarginReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 63: ProtoOAExpectedMarginRes.payloadType:type_name -> ProtoOAPayloadType
-	111, // 64: ProtoOAExpectedMarginRes.margin:type_name -> ProtoOAExpectedMargin
-	94,  // 65: ProtoOAMarginChangedEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 66: ProtoOACashFlowHistoryListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 67: ProtoOACashFlowHistoryListRes.payloadType:type_name -> ProtoOAPayloadType
-	104, // 68: ProtoOACashFlowHistoryListRes.depositWithdraw:type_name -> ProtoOADepositWithdraw
-	94,  // 69: ProtoOAGetAccountListByAccessTokenReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 70: ProtoOAGetAccountListByAccessTokenRes.payloadType:type_name -> ProtoOAPayloadType
-	112, // 71: ProtoOAGetAccountListByAccessTokenRes.permissionScope:type_name -> ProtoOAClientPermissionScope
-	113, // 72: ProtoOAGetAccountListByAccessTokenRes.ctidTraderAccount:type_name -> ProtoOACtidTraderAccount
-	94,  // 73: ProtoOARefreshTokenReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 74: ProtoOARefreshTokenRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 75: ProtoOASubscribeSpotsReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 76: ProtoOASubscribeSpotsRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 77: ProtoOAUnsubscribeSpotsReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 78: ProtoOAUnsubscribeSpotsRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 79: ProtoOASpotEvent.payloadType:type_name -> ProtoOAPayloadType
-	114, // 80: ProtoOASpotEvent.trendbar:type_name -> ProtoOATrendbar
-	94,  // 81: ProtoOASubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
-	115, // 82: ProtoOASubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
-	94,  // 83: ProtoOASubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 84: ProtoOAUnsubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
-	115, // 85: ProtoOAUnsubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
-	94,  // 86: ProtoOAUnsubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 87: ProtoOAGetTrendbarsReq.payloadType:type_name -> ProtoOAPayloadType
-	115, // 88: ProtoOAGetTrendbarsReq.period:type_name -> ProtoOATrendbarPeriod
-	94,  // 89: ProtoOAGetTrendbarsRes.payloadType:type_name -> ProtoOAPayloadType
-	115, // 90: ProtoOAGetTrendbarsRes.period:type_name -> ProtoOATrendbarPeriod
-	114, // 91: ProtoOAGetTrendbarsRes.trendbar:type_name -> ProtoOATrendbar
-	94,  // 92: ProtoOAGetTickDataReq.payloadType:type_name -> ProtoOAPayloadType
-	116, // 93: ProtoOAGetTickDataReq.type:type_name -> ProtoOAQuoteType
-	94,  // 94: ProtoOAGetTickDataRes.payloadType:type_name -> ProtoOAPayloadType
-	117, // 95: ProtoOAGetTickDataRes.tickData:type_name -> ProtoOATickData
-	94,  // 96: ProtoOAGetCtidProfileByTokenReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 97: ProtoOAGetCtidProfileByTokenRes.payloadType:type_name -> ProtoOAPayloadType
-	118, // 98: ProtoOAGetCtidProfileByTokenRes.profile:type_name -> ProtoOACtidProfile
-	94,  // 99: ProtoOADepthEvent.payloadType:type_name -> ProtoOAPayloadType
-	119, // 100: ProtoOADepthEvent.newQuotes:type_name -> ProtoOADepthQuote
-	94,  // 101: ProtoOASubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 102: ProtoOASubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 103: ProtoOAUnsubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 104: ProtoOAUnsubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 105: ProtoOASymbolCategoryListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 106: ProtoOASymbolCategoryListRes.payloadType:type_name -> ProtoOAPayloadType
-	120, // 107: ProtoOASymbolCategoryListRes.symbolCategory:type_name -> ProtoOASymbolCategory
-	94,  // 108: ProtoOAAccountLogoutReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 109: ProtoOAAccountLogoutRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 110: ProtoOAAccountDisconnectEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 111: ProtoOAMarginCallListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 112: ProtoOAMarginCallListRes.payloadType:type_name -> ProtoOAPayloadType
-	121, // 113: ProtoOAMarginCallListRes.marginCall:type_name -> ProtoOAMarginCall
-	94,  // 114: ProtoOAMarginCallUpdateReq.payloadType:type_name -> ProtoOAPayloadType
-	121, // 115: ProtoOAMarginCallUpdateReq.marginCall:type_name -> ProtoOAMarginCall
-	94,  // 116: ProtoOAMarginCallUpdateRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 117: ProtoOAMarginCallUpdateEvent.payloadType:type_name -> ProtoOAPayloadType
-	121, // 118: ProtoOAMarginCallUpdateEvent.marginCall:type_name -> ProtoOAMarginCall
-	94,  // 119: ProtoOAMarginCallTriggerEvent.payloadType:type_name -> ProtoOAPayloadType
-	121, // 120: ProtoOAMarginCallTriggerEvent.marginCall:type_name -> ProtoOAMarginCall
-	94,  // 121: ProtoOAGetDynamicLeverageByIDReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 122: ProtoOAGetDynamicLeverageByIDRes.payloadType:type_name -> ProtoOAPayloadType
-	122, // 123: ProtoOAGetDynamicLeverageByIDRes.leverage:type_name -> ProtoOADynamicLeverage
-	94,  // 124: ProtoOADealListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 125: ProtoOADealListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
-	102, // 126: ProtoOADealListByPositionIdRes.deal:type_name -> ProtoOADeal
-	94,  // 127: ProtoOAOrderDetailsReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 128: ProtoOAOrderDetailsRes.payloadType:type_name -> ProtoOAPayloadType
-	101, // 129: ProtoOAOrderDetailsRes.order:type_name -> ProtoOAOrder
-	102, // 130: ProtoOAOrderDetailsRes.deal:type_name -> ProtoOADeal
-	94,  // 131: ProtoOAOrderListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 132: ProtoOAOrderListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
-	101, // 133: ProtoOAOrderListByPositionIdRes.order:type_name -> ProtoOAOrder
-	94,  // 134: ProtoOADealOffsetListReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 135: ProtoOADealOffsetListRes.payloadType:type_name -> ProtoOAPayloadType
-	123, // 136: ProtoOADealOffsetListRes.offsetBy:type_name -> ProtoOADealOffset
-	123, // 137: ProtoOADealOffsetListRes.offsetting:type_name -> ProtoOADealOffset
-	94,  // 138: ProtoOAGetPositionUnrealizedPnLReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 139: ProtoOAGetPositionUnrealizedPnLRes.payloadType:type_name -> ProtoOAPayloadType
-	124, // 140: ProtoOAGetPositionUnrealizedPnLRes.positionUnrealizedPnL:type_name -> ProtoOAPositionUnrealizedPnL
-	94,  // 141: ProtoOAv1PnLChangeEvent.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 142: ProtoOAv1PnLChangeSubscribeReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 143: ProtoOAv1PnLChangeSubscribeRes.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 144: ProtoOAv1PnLChangeUnSubscribeReq.payloadType:type_name -> ProtoOAPayloadType
-	94,  // 145: ProtoOAv1PnLChangeUnSubscribeRes.payloadType:type_name -> ProtoOAPayloadType
-	146, // [146:146] is the sub-list for method output_type
-	146, // [146:146] is the sub-list for method input_type
-	146, // [146:146] is the sub-list for extension type_name
-	146, // [146:146] is the sub-list for extension extendee
-	0,   // [0:146] is the sub-list for field type_name
+	89,  // 0: ProtoOAApplicationAuthReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 1: ProtoOAApplicationAuthRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 2: ProtoOAAccountAuthReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 3: ProtoOAAccountAuthRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 4: ProtoOAErrorRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 5: ProtoOAClientDisconnectEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 6: ProtoOAAccountsTokenInvalidatedEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 7: ProtoOAVersionReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 8: ProtoOAVersionRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 9: ProtoOANewOrderReq.payloadType:type_name -> ProtoOAPayloadType
+	90,  // 10: ProtoOANewOrderReq.orderType:type_name -> ProtoOAOrderType
+	91,  // 11: ProtoOANewOrderReq.tradeSide:type_name -> ProtoOATradeSide
+	92,  // 12: ProtoOANewOrderReq.timeInForce:type_name -> ProtoOATimeInForce
+	93,  // 13: ProtoOANewOrderReq.stopTriggerMethod:type_name -> ProtoOAOrderTriggerMethod
+	89,  // 14: ProtoOAExecutionEvent.payloadType:type_name -> ProtoOAPayloadType
+	94,  // 15: ProtoOAExecutionEvent.executionType:type_name -> ProtoOAExecutionType
+	95,  // 16: ProtoOAExecutionEvent.position:type_name -> ProtoOAPosition
+	96,  // 17: ProtoOAExecutionEvent.order:type_name -> ProtoOAOrder
+	97,  // 18: ProtoOAExecutionEvent.deal:type_name -> ProtoOADeal
+	98,  // 19: ProtoOAExecutionEvent.bonusDepositWithdraw:type_name -> ProtoOABonusDepositWithdraw
+	99,  // 20: ProtoOAExecutionEvent.depositWithdraw:type_name -> ProtoOADepositWithdraw
+	89,  // 21: ProtoOACancelOrderReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 22: ProtoOAAmendOrderReq.payloadType:type_name -> ProtoOAPayloadType
+	93,  // 23: ProtoOAAmendOrderReq.stopTriggerMethod:type_name -> ProtoOAOrderTriggerMethod
+	89,  // 24: ProtoOAAmendPositionSLTPReq.payloadType:type_name -> ProtoOAPayloadType
+	93,  // 25: ProtoOAAmendPositionSLTPReq.stopLossTriggerMethod:type_name -> ProtoOAOrderTriggerMethod
+	89,  // 26: ProtoOAClosePositionReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 27: ProtoOATrailingSLChangedEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 28: ProtoOAAssetListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 29: ProtoOAAssetListRes.payloadType:type_name -> ProtoOAPayloadType
+	100, // 30: ProtoOAAssetListRes.asset:type_name -> ProtoOAAsset
+	89,  // 31: ProtoOASymbolsListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 32: ProtoOASymbolsListRes.payloadType:type_name -> ProtoOAPayloadType
+	101, // 33: ProtoOASymbolsListRes.symbol:type_name -> ProtoOALightSymbol
+	102, // 34: ProtoOASymbolsListRes.archivedSymbol:type_name -> ProtoOAArchivedSymbol
+	89,  // 35: ProtoOASymbolByIdReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 36: ProtoOASymbolByIdRes.payloadType:type_name -> ProtoOAPayloadType
+	103, // 37: ProtoOASymbolByIdRes.symbol:type_name -> ProtoOASymbol
+	102, // 38: ProtoOASymbolByIdRes.archivedSymbol:type_name -> ProtoOAArchivedSymbol
+	89,  // 39: ProtoOASymbolsForConversionReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 40: ProtoOASymbolsForConversionRes.payloadType:type_name -> ProtoOAPayloadType
+	101, // 41: ProtoOASymbolsForConversionRes.symbol:type_name -> ProtoOALightSymbol
+	89,  // 42: ProtoOASymbolChangedEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 43: ProtoOAAssetClassListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 44: ProtoOAAssetClassListRes.payloadType:type_name -> ProtoOAPayloadType
+	104, // 45: ProtoOAAssetClassListRes.assetClass:type_name -> ProtoOAAssetClass
+	89,  // 46: ProtoOATraderReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 47: ProtoOATraderRes.payloadType:type_name -> ProtoOAPayloadType
+	105, // 48: ProtoOATraderRes.trader:type_name -> ProtoOATrader
+	89,  // 49: ProtoOATraderUpdatedEvent.payloadType:type_name -> ProtoOAPayloadType
+	105, // 50: ProtoOATraderUpdatedEvent.trader:type_name -> ProtoOATrader
+	89,  // 51: ProtoOAReconcileReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 52: ProtoOAReconcileRes.payloadType:type_name -> ProtoOAPayloadType
+	95,  // 53: ProtoOAReconcileRes.position:type_name -> ProtoOAPosition
+	96,  // 54: ProtoOAReconcileRes.order:type_name -> ProtoOAOrder
+	89,  // 55: ProtoOAOrderErrorEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 56: ProtoOADealListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 57: ProtoOADealListRes.payloadType:type_name -> ProtoOAPayloadType
+	97,  // 58: ProtoOADealListRes.deal:type_name -> ProtoOADeal
+	89,  // 59: ProtoOAOrderListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 60: ProtoOAOrderListRes.payloadType:type_name -> ProtoOAPayloadType
+	96,  // 61: ProtoOAOrderListRes.order:type_name -> ProtoOAOrder
+	89,  // 62: ProtoOAExpectedMarginReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 63: ProtoOAExpectedMarginRes.payloadType:type_name -> ProtoOAPayloadType
+	106, // 64: ProtoOAExpectedMarginRes.margin:type_name -> ProtoOAExpectedMargin
+	89,  // 65: ProtoOAMarginChangedEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 66: ProtoOACashFlowHistoryListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 67: ProtoOACashFlowHistoryListRes.payloadType:type_name -> ProtoOAPayloadType
+	99,  // 68: ProtoOACashFlowHistoryListRes.depositWithdraw:type_name -> ProtoOADepositWithdraw
+	89,  // 69: ProtoOAGetAccountListByAccessTokenReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 70: ProtoOAGetAccountListByAccessTokenRes.payloadType:type_name -> ProtoOAPayloadType
+	107, // 71: ProtoOAGetAccountListByAccessTokenRes.permissionScope:type_name -> ProtoOAClientPermissionScope
+	108, // 72: ProtoOAGetAccountListByAccessTokenRes.ctidTraderAccount:type_name -> ProtoOACtidTraderAccount
+	89,  // 73: ProtoOARefreshTokenReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 74: ProtoOARefreshTokenRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 75: ProtoOASubscribeSpotsReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 76: ProtoOASubscribeSpotsRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 77: ProtoOAUnsubscribeSpotsReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 78: ProtoOAUnsubscribeSpotsRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 79: ProtoOASpotEvent.payloadType:type_name -> ProtoOAPayloadType
+	109, // 80: ProtoOASpotEvent.trendbar:type_name -> ProtoOATrendbar
+	89,  // 81: ProtoOASubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
+	110, // 82: ProtoOASubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
+	89,  // 83: ProtoOASubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 84: ProtoOAUnsubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
+	110, // 85: ProtoOAUnsubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
+	89,  // 86: ProtoOAUnsubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 87: ProtoOAGetTrendbarsReq.payloadType:type_name -> ProtoOAPayloadType
+	110, // 88: ProtoOAGetTrendbarsReq.period:type_name -> ProtoOATrendbarPeriod
+	89,  // 89: ProtoOAGetTrendbarsRes.payloadType:type_name -> ProtoOAPayloadType
+	110, // 90: ProtoOAGetTrendbarsRes.period:type_name -> ProtoOATrendbarPeriod
+	109, // 91: ProtoOAGetTrendbarsRes.trendbar:type_name -> ProtoOATrendbar
+	89,  // 92: ProtoOAGetTickDataReq.payloadType:type_name -> ProtoOAPayloadType
+	111, // 93: ProtoOAGetTickDataReq.type:type_name -> ProtoOAQuoteType
+	89,  // 94: ProtoOAGetTickDataRes.payloadType:type_name -> ProtoOAPayloadType
+	112, // 95: ProtoOAGetTickDataRes.tickData:type_name -> ProtoOATickData
+	89,  // 96: ProtoOAGetCtidProfileByTokenReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 97: ProtoOAGetCtidProfileByTokenRes.payloadType:type_name -> ProtoOAPayloadType
+	113, // 98: ProtoOAGetCtidProfileByTokenRes.profile:type_name -> ProtoOACtidProfile
+	89,  // 99: ProtoOADepthEvent.payloadType:type_name -> ProtoOAPayloadType
+	114, // 100: ProtoOADepthEvent.newQuotes:type_name -> ProtoOADepthQuote
+	89,  // 101: ProtoOASubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 102: ProtoOASubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 103: ProtoOAUnsubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 104: ProtoOAUnsubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 105: ProtoOASymbolCategoryListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 106: ProtoOASymbolCategoryListRes.payloadType:type_name -> ProtoOAPayloadType
+	115, // 107: ProtoOASymbolCategoryListRes.symbolCategory:type_name -> ProtoOASymbolCategory
+	89,  // 108: ProtoOAAccountLogoutReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 109: ProtoOAAccountLogoutRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 110: ProtoOAAccountDisconnectEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 111: ProtoOAMarginCallListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 112: ProtoOAMarginCallListRes.payloadType:type_name -> ProtoOAPayloadType
+	116, // 113: ProtoOAMarginCallListRes.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 114: ProtoOAMarginCallUpdateReq.payloadType:type_name -> ProtoOAPayloadType
+	116, // 115: ProtoOAMarginCallUpdateReq.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 116: ProtoOAMarginCallUpdateRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 117: ProtoOAMarginCallUpdateEvent.payloadType:type_name -> ProtoOAPayloadType
+	116, // 118: ProtoOAMarginCallUpdateEvent.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 119: ProtoOAMarginCallTriggerEvent.payloadType:type_name -> ProtoOAPayloadType
+	116, // 120: ProtoOAMarginCallTriggerEvent.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 121: ProtoOAGetDynamicLeverageByIDReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 122: ProtoOAGetDynamicLeverageByIDRes.payloadType:type_name -> ProtoOAPayloadType
+	117, // 123: ProtoOAGetDynamicLeverageByIDRes.leverage:type_name -> ProtoOADynamicLeverage
+	89,  // 124: ProtoOADealListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 125: ProtoOADealListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
+	97,  // 126: ProtoOADealListByPositionIdRes.deal:type_name -> ProtoOADeal
+	89,  // 127: ProtoOAOrderDetailsReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 128: ProtoOAOrderDetailsRes.payloadType:type_name -> ProtoOAPayloadType
+	96,  // 129: ProtoOAOrderDetailsRes.order:type_name -> ProtoOAOrder
+	97,  // 130: ProtoOAOrderDetailsRes.deal:type_name -> ProtoOADeal
+	89,  // 131: ProtoOAOrderListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 132: ProtoOAOrderListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
+	96,  // 133: ProtoOAOrderListByPositionIdRes.order:type_name -> ProtoOAOrder
+	89,  // 134: ProtoOADealOffsetListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 135: ProtoOADealOffsetListRes.payloadType:type_name -> ProtoOAPayloadType
+	118, // 136: ProtoOADealOffsetListRes.offsetBy:type_name -> ProtoOADealOffset
+	118, // 137: ProtoOADealOffsetListRes.offsetting:type_name -> ProtoOADealOffset
+	89,  // 138: ProtoOAGetPositionUnrealizedPnLReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 139: ProtoOAGetPositionUnrealizedPnLRes.payloadType:type_name -> ProtoOAPayloadType
+	119, // 140: ProtoOAGetPositionUnrealizedPnLRes.positionUnrealizedPnL:type_name -> ProtoOAPositionUnrealizedPnL
+	141, // [141:141] is the sub-list for method output_type
+	141, // [141:141] is the sub-list for method input_type
+	141, // [141:141] is the sub-list for extension type_name
+	141, // [141:141] is the sub-list for extension extendee
+	0,   // [0:141] is the sub-list for field type_name
 }
 
 func init() { file_Messages_proto_init() }
@@ -7607,7 +7265,7 @@ func file_Messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_Messages_proto_rawDesc), len(file_Messages_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   94,
+			NumMessages:   89,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
