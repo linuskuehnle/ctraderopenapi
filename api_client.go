@@ -307,6 +307,9 @@ func (c *apiClient) WithRequestTimeout(timeout time.Duration) APIClient {
 	if c.lifecycleData.IsClientInitialized() {
 		return c
 	}
+	if timeout <= MinRequestTimeout {
+		return c
+	}
 
 	c.cfg.requestTimeout = timeout
 	return c
@@ -317,6 +320,9 @@ func (c *apiClient) WithQueueBufferSize(queueBufferSize int) APIClient {
 	defer c.mu.Unlock()
 
 	if c.lifecycleData.IsClientInitialized() {
+		return c
+	}
+	if queueBufferSize <= MinQueueBufferSize {
 		return c
 	}
 
@@ -332,6 +338,9 @@ func (c *apiClient) WithTCPMessageBufferSize(tcpMessageBufferSize int) APIClient
 	if c.lifecycleData.IsClientInitialized() {
 		return c
 	}
+	if tcpMessageBufferSize <= MinTCPMessageBufferSize {
+		return c
+	}
 
 	c.cfg.tcpMessageBufferSize = tcpMessageBufferSize
 
@@ -343,6 +352,9 @@ func (c *apiClient) WithRequestHeapIterationTimeout(requestHeapIterationTimeout 
 	defer c.mu.Unlock()
 
 	if c.lifecycleData.IsClientInitialized() {
+		return c
+	}
+	if requestHeapIterationTimeout <= MinRequestHeapIterationTimeout {
 		return c
 	}
 

@@ -25,6 +25,11 @@ const (
 	ConfigDefault_QueueBufferSize             = 10
 	ConfigDefault_TCPMessageBufferSize        = 10
 	ConfigDefault_RequestHeapIterationTimeout = datatypes.DefaultRequestHeapIterationTimeout
+
+	MinRequestTimeout              = time.Millisecond * 50
+	MinQueueBufferSize             = 1
+	MinTCPMessageBufferSize        = 1
+	MinRequestHeapIterationTimeout = datatypes.MinRequestHeapIterationTimeout
 )
 
 const (

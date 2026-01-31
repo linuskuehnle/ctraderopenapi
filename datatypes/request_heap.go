@@ -21,6 +21,7 @@ import (
 )
 
 const DefaultRequestHeapIterationTimeout = 50 * time.Millisecond
+const MinRequestHeapIterationTimeout = 10 * time.Millisecond
 
 type RequestHeap interface {
 	Start() error
