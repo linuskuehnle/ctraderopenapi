@@ -161,10 +161,12 @@ func (c *apiClient) onFatalError(err error) {
 	event := &FatalErrorEvent{
 		Err: err,
 	}
-	eventHandled := c.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_FatalErrorEvent), event)
-	if !eventHandled {
+	hasEvent := c.clientEventHandler.HasListenerSource(ClientEventType_FatalErrorEvent)
+	if !hasEvent {
 		panic(err)
 	}
+
+	c.clientEventHandler.HandleEvent(ClientEventType_FatalErrorEvent, event)
 
 	// Drop TCP connection to trigger reconnect routine to attempt recovery from the fatal error
 	c.tcpClient.JustCloseConn()
@@ -178,7 +180,7 @@ func (c *apiClient) onConnectionLoss() {
 	c.accManager.ClearAccDisconnectConfirms()
 
 	event := &ConnectionLossEvent{}
-	c.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ConnectionLossEvent), event)
+	c.clientEventHandler.HandleEvent(ClientEventType_ConnectionLossEvent, event)
 }
 
 func (c *apiClient) onReconnectSuccess() {
@@ -226,7 +228,7 @@ func (c *apiClient) onReconnectSuccess() {
 		}
 
 		event := &ReconnectSuccessEvent{}
-		c.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectSuccessEvent), event)
+		c.clientEventHandler.HandleEvent(ClientEventType_ReconnectSuccessEvent, event)
 
 		c.lifecycleData.SetClientConnected()
 	}(jobErrCh)
@@ -236,7 +238,7 @@ func (c *apiClient) onReconnectFail(err error) {
 	event := &ReconnectFailEvent{
 		Err: err,
 	}
-	c.clientEventHandler.HandleEvent(datatypes.EventId(ClientEventType_ReconnectFailEvent), event)
+	c.clientEventHandler.HandleEvent(ClientEventType_ReconnectFailEvent, event)
 }
 
 func (c *apiClient) onAccountDisconnect(ctid CtraderAccountId) {

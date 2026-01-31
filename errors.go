@@ -144,6 +144,28 @@ func (e *ProtoMarshalError) Error() string {
 	return errText
 }
 
+// EventKeyAlreadyIncludedError is returned when the provided event key
+// is included in the referenced EventListener instance during an
+// operation that aims to add that event key to the EventListener.
+type EventKeyAlreadyIncludedError struct {
+	EventKey apiEventKey
+}
+
+func (e *EventKeyAlreadyIncludedError) Error() string {
+	return fmt.Sprintf("event key %s already included", e.EventKey)
+}
+
+// EventKeyNotIncludedError is returned when the provided event key
+// is not included in the referenced EventListener instance during an
+// operation that aims to remove that event key from the EventListener.
+type EventKeyNotIncludedError struct {
+	EventKey apiEventKey
+}
+
+func (e *EventKeyNotIncludedError) Error() string {
+	return fmt.Sprintf("event key %s is not included", e.EventKey)
+}
+
 /*
 	Sub-package error assertions
 */
@@ -198,20 +220,6 @@ type EventSubscriptionAlreadyExistsError[EventT comparable] = datatypes.EventSub
 // It is returned by the account manager when attempting to remove an event subscription
 // that does not exist for the given account and event type.
 type EventSubscriptionDoesNotExistError[EventT comparable] = datatypes.EventSubscriptionDoesNotExistError[EventT]
-
-/*
-	/datatypes/event_handler.go
-*/
-// IdAlreadyIncludedError is an alias for `datatypes.IdAlreadyIncludedError`.
-// The event handler returns this error when attempting to register a
-// callback for an event id that is already registered.
-type IdAlreadyIncludedError = datatypes.IdAlreadyIncludedError
-
-// IdNotIncludedError is an alias for `datatypes.IdNotIncludedError`.
-// It is returned when trying to remove or dispatch to an event id that
-// has no registered handler (unless the handler was constructed with
-// `WithIgnoreIdsNotIncluded`, in which case dispatch skips silently).
-type IdNotIncludedError = datatypes.IdNotIncludedError
 
 /*
 	/datatypes/lifecycle.go

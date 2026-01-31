@@ -186,27 +186,27 @@ var hasHookForAPIEvent = map[ProtoOAPayloadType]bool{
 
 const (
 	// Subscribable events
-	APIEventType_Spots apiEventType = iota
-	APIEventType_LiveTrendbars
-	APIEventType_DepthQuotes
+	APIEventType_Spots         apiEventType = PROTO_OA_SPOT_EVENT
+	APIEventType_LiveTrendbars              = 1
+	APIEventType_DepthQuotes                = PROTO_OA_DEPTH_EVENT
 
 	// Listenable events
-	APIEventType_TrailingSLChanged
-	APIEventType_SymbolChanged
-	APIEventType_TraderUpdated
-	APIEventType_Execution
-	APIEventType_OrderError
-	APIEventType_MarginChanged
-	APIEventType_AccountsTokenInvalidated
-	APIEventType_ClientDisconnect
-	APIEventType_AccountDisconnect
-	APIEventType_MarginCallUpdate
-	APIEventType_MarginCallTrigger
+	APIEventType_TrailingSLChanged        = PROTO_OA_TRAILING_SL_CHANGED_EVENT
+	APIEventType_SymbolChanged            = PROTO_OA_SYMBOL_CHANGED_EVENT
+	APIEventType_TraderUpdated            = PROTO_OA_TRADER_UPDATE_EVENT
+	APIEventType_Execution                = PROTO_OA_EXECUTION_EVENT
+	APIEventType_OrderError               = PROTO_OA_ORDER_ERROR_EVENT
+	APIEventType_MarginChanged            = PROTO_OA_MARGIN_CHANGED_EVENT
+	APIEventType_AccountsTokenInvalidated = PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT
+	APIEventType_ClientDisconnect         = PROTO_OA_CLIENT_DISCONNECT_EVENT
+	APIEventType_AccountDisconnect        = PROTO_OA_ACCOUNT_DISCONNECT_EVENT
+	APIEventType_MarginCallUpdate         = PROTO_OA_MARGIN_CALL_UPDATE_EVENT
+	APIEventType_MarginCallTrigger        = PROTO_OA_MARGIN_CALL_TRIGGER_EVENT
 )
 
 const (
 	// API Client events
-	ClientEventType_FatalErrorEvent clientEventType = iota
+	ClientEventType_FatalErrorEvent clientEventType = iota + 1 + 100
 	ClientEventType_ConnectionLossEvent
 	ClientEventType_ReconnectSuccessEvent
 	ClientEventType_ReconnectFailEvent

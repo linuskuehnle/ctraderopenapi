@@ -15,7 +15,6 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
 	"github.com/linuskuehnle/ctraderopenapi/messages"
 
 	"context"
@@ -30,7 +29,7 @@ Pass through functions
 */
 /**/
 
-func (c *apiClient) SubscribeAPIEvent(eventData APIEventData) error {
+func (c *apiClient) SubscribeAPIEvent(eventData APIEventSubData) error {
 	ctid, err := c.subscribeAPIEvent(eventData, false)
 	if err != nil {
 		return err
@@ -39,7 +38,7 @@ func (c *apiClient) SubscribeAPIEvent(eventData APIEventData) error {
 	return c.accManager.AddEventSubscription(ctid, eventData.EventType, eventData.SubcriptionData)
 }
 
-func (c *apiClient) subscribeAPIEvent(eventData APIEventData, bypassReconnectBlock bool) (CtraderAccountId, error) {
+func (c *apiClient) subscribeAPIEvent(eventData APIEventSubData, bypassReconnectBlock bool) (CtraderAccountId, error) {
 	var ctid CtraderAccountId
 
 	if eventData.SubcriptionData == nil {
@@ -127,7 +126,7 @@ func (c *apiClient) subscribeAPIEvent(eventData APIEventData, bypassReconnectBlo
 	return ctid, c.sendRequest(reqData)
 }
 
-func (c *apiClient) UnsubscribeAPIEvent(eventData APIEventData) error {
+func (c *apiClient) UnsubscribeAPIEvent(eventData APIEventSubData) error {
 	ctid, err := c.unsubscribeAPIEvent(eventData, false)
 	if err != nil {
 		return err
@@ -137,7 +136,7 @@ func (c *apiClient) UnsubscribeAPIEvent(eventData APIEventData) error {
 	return nil
 }
 
-func (c *apiClient) unsubscribeAPIEvent(eventData APIEventData, bypassReconnectBlock bool) (CtraderAccountId, error) {
+func (c *apiClient) unsubscribeAPIEvent(eventData APIEventSubData, bypassReconnectBlock bool) (CtraderAccountId, error) {
 	var ctid CtraderAccountId
 
 	if eventData.SubcriptionData == nil {
@@ -225,147 +224,53 @@ func (c *apiClient) unsubscribeAPIEvent(eventData APIEventData, bypassReconnectB
 	return ctid, c.sendRequest(reqData)
 }
 
-func (c *apiClient) ListenToAPIEvent(ctx context.Context, eventType eventType, onEventCh chan APIEvent) error {
-	if onEventCh == nil {
-		return &FunctionInvalidArgError{
-			FunctionName: "ListenToAPIEvent",
-			Err:          errors.New("onEventCh mustn't be nil"),
-		}
+func (c *apiClient) ListenToAPIEvent(ctx context.Context, eventData APIEventListenData) error {
+	if err := eventData.CheckError(); err != nil {
+		return err
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	var eventId datatypes.EventId
-	var eventCallback func(event proto.Message)
+	var removeCallback func() error
 
-	switch eventType {
-	case APIEventType_Spots:
-		eventId = datatypes.EventId(PROTO_OA_SPOT_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOASpotEvent)
-		}
-	case APIEventType_DepthQuotes:
-		eventId = datatypes.EventId(PROTO_OA_DEPTH_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOADepthEvent)
+	if eventData.EventKeyData != nil {
+		if err := c.apiEventHandler.SetListener(eventData.EventType, eventData.EventKeyData, eventData.EventCh); err != nil {
+			return err
 		}
 
-	case APIEventType_TrailingSLChanged:
-		eventId = datatypes.EventId(PROTO_OA_TRAILING_SL_CHANGED_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOATrailingSLChangedEvent)
+		removeCallback = func() error {
+			return c.apiEventHandler.UnsetListener(eventData.EventType, eventData.EventKeyData)
 		}
-	case APIEventType_SymbolChanged:
-		eventId = datatypes.EventId(PROTO_OA_SYMBOL_CHANGED_EVENT)
+	} else {
+		c.apiEventHandler.SetDefaultListener(eventData.EventType, eventData.EventCh)
 
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOASymbolChangedEvent)
-		}
-	case APIEventType_TraderUpdated:
-		eventId = datatypes.EventId(PROTO_OA_TRADER_UPDATE_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOATraderUpdatedEvent)
-		}
-	case APIEventType_Execution:
-		eventId = datatypes.EventId(PROTO_OA_EXECUTION_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAExecutionEvent)
-		}
-	case APIEventType_OrderError:
-		eventId = datatypes.EventId(PROTO_OA_ORDER_ERROR_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAOrderErrorEvent)
-		}
-	case APIEventType_MarginChanged:
-		eventId = datatypes.EventId(PROTO_OA_MARGIN_CHANGED_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAMarginChangedEvent)
-		}
-	case APIEventType_AccountsTokenInvalidated:
-		eventId = datatypes.EventId(PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAAccountsTokenInvalidatedEvent)
-		}
-	case APIEventType_ClientDisconnect:
-		eventId = datatypes.EventId(PROTO_OA_CLIENT_DISCONNECT_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAClientDisconnectEvent)
-		}
-	case APIEventType_AccountDisconnect:
-		eventId = datatypes.EventId(PROTO_OA_ACCOUNT_DISCONNECT_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAAccountDisconnectEvent)
-		}
-	case APIEventType_MarginCallUpdate:
-		eventId = datatypes.EventId(PROTO_OA_MARGIN_CALL_UPDATE_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAMarginCallUpdateEvent)
-		}
-	case APIEventType_MarginCallTrigger:
-		eventId = datatypes.EventId(PROTO_OA_MARGIN_CALL_TRIGGER_EVENT)
-
-		eventCallback = func(event proto.Message) {
-			onEventCh <- event.(*ProtoOAMarginCallTriggerEvent)
-		}
-	default:
-		return &FunctionInvalidArgError{
-			FunctionName: "ListenToAPIEvent",
-			Err:          fmt.Errorf("event type '%d' is not listenable", eventType),
+		removeCallback = func() error {
+			c.apiEventHandler.UnsetDefaultListener(eventData.EventType)
+			return nil
 		}
 	}
 
-	if err := c.apiEventHandler.AddEvent(eventId, eventCallback); err != nil {
-		return err
-	}
-
-	removeCallback := func() error {
-		err := c.apiEventHandler.RemoveEvent(eventId)
-		close(onEventCh)
-		return err
-	}
 	go c.runListenerRemove(ctx, removeCallback)
 
 	return nil
 }
 
-func (c *apiClient) ListenToClientEvent(ctx context.Context, clientEventType clientEventType, onEventCh chan ClientEvent) error {
-	if onEventCh == nil {
-		return &FunctionInvalidArgError{
-			FunctionName: "ListenToClientEvent",
-			Err:          errors.New("onEventCh mustn't be nil"),
-		}
+func (c *apiClient) ListenToClientEvent(ctx context.Context, eventData ClientEventListenData) error {
+	if err := eventData.CheckError(); err != nil {
+		return err
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	eventId := datatypes.EventId(clientEventType)
-	eventCallback := func(event ClientEvent) {
-		onEventCh <- event
-	}
-
-	if err := c.clientEventHandler.AddEvent(eventId, eventCallback); err != nil {
-		return err
-	}
+	c.clientEventHandler.SetDefaultListener(eventData.EventType, eventData.EventCh)
 
 	removeCallback := func() error {
-		err := c.clientEventHandler.RemoveEvent(eventId)
-
-		close(onEventCh)
-		return err
+		c.clientEventHandler.UnsetDefaultListener(eventData.EventType)
+		return nil
 	}
+
 	go c.runListenerRemove(ctx, removeCallback)
 
 	return nil
@@ -396,9 +301,9 @@ func (c *apiClient) runListenerRemove(listenerCtx context.Context, removeCallbac
 
 // handleAPIEvent is called on an incoming event message that is listenable
 func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
-	var eventId datatypes.EventId = datatypes.EventId(msgType)
+	var eventType apiEventType = apiEventType(msgType)
 
-	hasEvent := c.apiEventHandler.HasEvent(eventId)
+	hasEvent := c.apiEventHandler.HasListenerSource(eventType)
 	if !hasEvent && !hasHookForAPIEvent[msgType] {
 		// No listener and hook for this event, so ignore it
 		return nil
@@ -406,7 +311,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 
 	payloadBytes := protoMsg.GetPayload()
 
-	var event proto.Message
+	var events []proto.Message
 
 	switch msgType {
 	case PROTO_OA_SPOT_EVENT:
@@ -420,7 +325,33 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		if eventMsg.Trendbar != nil {
+			// Filter trendbars by included periods
+			trendbarsByPeriod := make(map[ProtoOATrendbarPeriod][]*messages.ProtoOATrendbar)
+			for _, trendbar := range eventMsg.GetTrendbar() {
+				period := trendbar.GetPeriod()
+
+				trendbarsByPeriod[period] = append(trendbarsByPeriod[period], trendbar)
+			}
+
+			for period, trendbars := range trendbarsByPeriod {
+				events = append(events, &ProtoOASpotEvent{
+					PayloadType:         eventMsg.PayloadType,
+					CtidTraderAccountId: eventMsg.CtidTraderAccountId,
+					SymbolId:            eventMsg.SymbolId,
+					Bid:                 eventMsg.Bid,
+					Ask:                 eventMsg.Ask,
+					Trendbar:            trendbars,
+					SessionClose:        eventMsg.SessionClose,
+					Timestamp:           eventMsg.Timestamp,
+					TrendbarPeriod:      &period,
+				})
+			}
+		} else {
+			events = append(events, &eventMsg)
+		}
+
+		events = append(events, &eventMsg)
 	case PROTO_OA_DEPTH_EVENT:
 		var eventMsg ProtoOADepthEvent
 
@@ -432,7 +363,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 
 	case PROTO_OA_TRAILING_SL_CHANGED_EVENT:
 		var eventMsg ProtoOATrailingSLChangedEvent
@@ -445,7 +376,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_SYMBOL_CHANGED_EVENT:
 		var eventMsg ProtoOASymbolChangedEvent
 
@@ -457,7 +388,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_TRADER_UPDATE_EVENT:
 		var eventMsg ProtoOATraderUpdatedEvent
 
@@ -469,7 +400,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_EXECUTION_EVENT:
 		var eventMsg ProtoOAExecutionEvent
 
@@ -481,7 +412,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_ORDER_ERROR_EVENT:
 		var eventMsg ProtoOAOrderErrorEvent
 
@@ -493,7 +424,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_MARGIN_CHANGED_EVENT:
 		var eventMsg ProtoOAMarginChangedEvent
 
@@ -505,7 +436,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT:
 		var eventMsg ProtoOAAccountsTokenInvalidatedEvent
 
@@ -517,8 +448,13 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_CLIENT_DISCONNECT_EVENT:
+		if err := c.authenticateApp(); err != nil {
+			c.fatalErrCh <- fmt.Errorf("failed to re-authenticate app after client disconnect: %w", err)
+			return nil
+		}
+
 		var eventMsg ProtoOAClientDisconnectEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -529,7 +465,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_ACCOUNT_DISCONNECT_EVENT:
 		var eventMsg ProtoOAAccountDisconnectEvent
 
@@ -544,7 +480,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		ctid := CtraderAccountId(eventMsg.GetCtidTraderAccountId())
 		c.onAccountDisconnect(ctid)
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_MARGIN_CALL_UPDATE_EVENT:
 		var eventMsg ProtoOAMarginCallUpdateEvent
 
@@ -556,7 +492,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	case PROTO_OA_MARGIN_CALL_TRIGGER_EVENT:
 		var eventMsg ProtoOAMarginCallTriggerEvent
 
@@ -568,7 +504,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 			return perr
 		}
 
-		event = &eventMsg
+		events = append(events, &eventMsg)
 	default:
 		return &UnexpectedMessageTypeError{
 			MsgType: msgType,
@@ -580,12 +516,10 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		return nil
 	}
 
-	eventHandled := c.apiEventHandler.HandleEvent(eventId, event)
-	if !eventHandled {
-		return &IdNotIncludedError{
-			Id: eventId,
-		}
+	for _, event := range events {
+		c.apiEventHandler.HandleEvent(eventType, event.(APIEvent))
 	}
+
 	return nil
 }
 
@@ -626,7 +560,7 @@ func SpawnAPIEventHandler[T APIEvent](ctx context.Context, onEventCh chan APIEve
 
 	go func(onEvent func(T), onEventCh chan APIEvent) {
 		for event := range onEventCh {
-			typedEvent, ok := CastToEventType[T](event)
+			typedEvent, ok := CastToAPIEventType[T](event)
 			if ok {
 				onEvent(typedEvent)
 			}

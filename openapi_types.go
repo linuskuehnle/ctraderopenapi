@@ -1467,6 +1467,8 @@ type ProtoOAErrorRes = messages.ProtoOAErrorRes
 
 /*
 Event that is sent when the connection with the client application is cancelled by the server. All the sessions for the traders' accounts will be terminated.
+
+IMPORTANT: Do not try to recover the connection. The client takes care of reconnecting and re-establishing the sessions internally.
 */
 type ProtoOAClientDisconnectEvent = messages.ProtoOAClientDisconnectEvent
 

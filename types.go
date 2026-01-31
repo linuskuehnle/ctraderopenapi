@@ -16,6 +16,7 @@ package ctraderopenapi
 
 import (
 	"github.com/linuskuehnle/ctraderopenapi/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/messages"
 
 	"fmt"
 	"time"
@@ -101,38 +102,52 @@ func (c ApplicationCredentials) CheckError() error {
 //   - Res: Pointer to an empty protobuf message struct where the response will be unmarshalled into.
 type RequestData = datatypes.RequestData
 
-type eventType = datatypes.EventId
+// Generic types for specifying underlying event types.
 
-// Event types for ListenToAPIEvent and ListenToClientEvent
-// Use these typed aliases to make intent explicit in public APIs.
+type eventType = datatypes.EventType
 type apiEventType = eventType
 type clientEventType = eventType
 
-// APIEvent marks protobuf message types that can be listened to
+// Type for matching api events to listener channels via EventListener.
+type apiEventKey = messages.APIEventKey
+
+// BaseEvent is the interface that all events must implement.
+type BaseEvent = datatypes.BaseEvent
+
+// APIEvent marks protobuf API event message types that can be listened to
 // (push-style events).
 //
 // These event types are delivered by the server independently from any
-// single client's request; users can register callbacks using
-// `ListenToAPIEvent` which will receive a `APIEvent` value when a
-// matching event occurs.
-type APIEvent interface {
-	IsListenableAPIEvent()
-}
+// single client's request; users can register listener channels of type
+// `APIEvent` using `ListenToAPIEvent`.
+type APIEvent = datatypes.APIEvent
 
 // ClientEvent marks events emitted by the API client itself
 // (for example connection loss, reconnect success, etc).
-type ClientEvent interface {
-	IsListenableClientEvent()
-}
+//
+// These event types are emitted internally by the client based on the
+// client behaviour and its connection status; users can register listener
+// channels of type `ClientEvent` using `ListenToClientEvent`.
+type ClientEvent = datatypes.ClientEvent
 
-// CastToEventType attempts to cast a generic `APIEvent` to the
+// DistributableEvent marks protobuf API event message types that can be
+// listened to (push-style events) AND can be used in an EventListener
+// instance.
+//
+// Distributable means you can add a specific event listener channel via
+// ListenToAPIEvent and provide key data. That way each event is matched
+// to the key data, and if it matches the event will only be sent to the
+// specifically provided event listener channel for that key data.
+type DistributableEvent = datatypes.DistributableEvent
+
+// CastToAPIEventType attempts to cast a generic `APIEvent` to the
 // concrete typed event `T`. It returns the typed value and `true` if the
 // assertion succeeded; otherwise it returns the zero value and `false`.
 //
 // This helper is commonly used by small adapter goroutines that accept a
 // generic `APIEvent` channel but want to call a typed handler
 // (for example converting `APIEvent` to `*ProtoOASpotEvent`).
-func CastToEventType[T APIEvent](event APIEvent) (T, bool) {
+func CastToAPIEventType[T APIEvent](event APIEvent) (T, bool) {
 	t, ok := event.(T)
 	return t, ok
 }
@@ -149,6 +164,94 @@ func CastToClientEventType[T ClientEvent](event ClientEvent) (T, bool) {
 	return t, ok
 }
 
+// APIEventListenData describes the parameters for listening to API events.
+//   - `EventType` selects which event to listen for.
+//   - `EventCh` receives an `APIEvent` that will be delivered for each matching event.
+//   - `EventKeyData` provides subscription-specific data for filtering (used by event listener).
+//
+// Mapping of `EventType` → concrete callback argument type:
+//   - APIEventType_Spots                    -> ProtoOASpotEvent
+//   - APIEventType_DepthQuotes              -> ProtoOADepthEvent
+//   - APIEventType_TrailingSLChanged        -> ProtoOATrailingSLChangedEvent
+//   - APIEventType_SymbolChanged            -> ProtoOASymbolChangedEvent
+//   - APIEventType_TraderUpdated            -> ProtoOATraderUpdatedEvent
+//   - APIEventType_Execution                -> ProtoOAExecutionEvent
+//   - APIEventType_OrderError               -> ProtoOAOrderErrorEvent
+//   - APIEventType_MarginChanged            -> ProtoOAMarginChangedEvent
+//   - APIEventType_AccountsTokenInvalidated -> ProtoOAAccountsTokenInvalidatedEvent
+//   - APIEventType_ClientDisconnect         -> ProtoOAClientDisconnectEvent
+//   - APIEventType_AccountDisconnect        -> ProtoOAAccountDisconnectEvent
+//   - APIEventType_MarginCallUpdate         -> ProtoOAMarginCallUpdateEvent
+//   - APIEventType_MarginCallTrigger        -> ProtoOAMarginCallTriggerEvent
+//
+// EventCh behaviour:
+//   - The provided channel is used by the library to deliver events of the
+//     requested `EventType`. The library will close the channel when the
+//     listener's context (`ctx`) is canceled or when the client is
+//     disconnected. Callers should treat channel close as end-of-stream and
+//     not attempt to write to the channel.
+//
+// EventKeyData usage:
+//   - When nil, all events of the specified `EventType` are delivered to `EventCh`.
+//   - When set to a concrete KeyData* type (e.g., KeyDataSpotEvent), only events matching
+//     the key data's criteria are delivered. The event handler uses BuildKey() to generate
+//     a key from the KeyData fields and routes only matching events to this listener.
+//   - Example: setting EventKeyData to KeyDataSpotEvent{Ctid: 12345, SymbolId: 1} will
+//     deliver only spot events for that specific account and symbol.
+//   - This enables fine-grained event filtering without the need for listener-side filtering.
+type APIEventListenData struct {
+	EventType    apiEventType
+	EventCh      chan APIEvent
+	EventKeyData apiEventKeyData
+}
+
+// Checks if APIEventListenData is correctly configured.
+//
+// If ok, returns nil.
+func (d *APIEventListenData) CheckError() error {
+	if d.EventType == 0 {
+		return fmt.Errorf("field EventType must not be 0")
+	}
+	if d.EventCh == nil {
+		return fmt.Errorf("field EventCh must not be nil")
+	}
+	return nil
+}
+
+// ClientEventListenData describes the parameters for listening to client events.
+//   - `EventType` selects which event to listen for.
+//   - `EventCh` receives a `ClientEvent` that will be delivered for each matching event.
+//
+// Mapping of `EventType` → concrete callback argument type:
+//   - ClientEventType_FatalErrorEvent       -> FatalErrorEvent
+//   - ClientEventType_ConnectionLossEvent   -> ConnectionLossEvent
+//   - ClientEventType_ReconnectSuccessEvent -> ReconnectSuccessEvent
+//   - ClientEventType_ReconnectFailEvent    -> ReconnectFailEvent
+//
+// EventCh behaviuor:
+//   - The provided channel is used by the library to deliver events of the
+//     requested `eventType`. The library will close the channel when the
+//     listener's context (`ctx`) is canceled or when the client is
+//     disconnected. Callers should treat channel close as end-of-stream and
+//     not attempt to write to the channel.
+type ClientEventListenData struct {
+	EventType clientEventType
+	EventCh   chan ClientEvent
+}
+
+// Checks if ClientEventListenData is correctly configured.
+//
+// If ok, returns nil.
+func (d *ClientEventListenData) CheckError() error {
+	if d.EventType == 0 {
+		return fmt.Errorf("field EventType must not be 0")
+	}
+	if d.EventCh == nil {
+		return fmt.Errorf("field EventCh must not be nil")
+	}
+	return nil
+}
+
 // SubscriptionData describes data required to subscribe or unsubscribe
 // to a subscription-based event (for example, account id and symbol
 // ids for the Spots event). Implementations validate their fields via
@@ -159,14 +262,14 @@ type SubscriptionData interface {
 	CheckError() error
 }
 
-// APIEventData groups the event type and subscription-specific
+// APIEventSubData groups the event type and subscription-specific
 // data for `SubscribeAPIEvent` and `UnsubscribeAPIEvent` calls.
 //
 //   - EventType selects which server-side event to subscribe/unsubscribe.
 //   - SubcriptionData is a concrete struct implementing `SubscriptionData`
 //     that provides the required parameters for that event (for example,
 //     account id and symbol ids for Spot events).
-type APIEventData struct {
+type APIEventSubData struct {
 	EventType       apiEventType
 	SubcriptionData SubscriptionData
 }
@@ -251,6 +354,9 @@ type FatalErrorEvent struct {
 }
 
 func (e *FatalErrorEvent) IsListenableClientEvent() {}
+func (*FatalErrorEvent) ToDistributableEvent() DistributableEvent {
+	return nil
+}
 
 // ConnectionLossEvent is emitted when the TCP connection to the
 // cTrader OpenAPI server is unexpectedly lost. Listeners may use this
@@ -258,6 +364,9 @@ func (e *FatalErrorEvent) IsListenableClientEvent() {}
 type ConnectionLossEvent struct{}
 
 func (e *ConnectionLossEvent) IsListenableClientEvent() {}
+func (*ConnectionLossEvent) ToDistributableEvent() DistributableEvent {
+	return nil
+}
 
 // ReconnectSuccessEvent is emitted after a successful reconnect and
 // re-authentication cycle. It indicates the client is operational
@@ -265,6 +374,9 @@ func (e *ConnectionLossEvent) IsListenableClientEvent() {}
 type ReconnectSuccessEvent struct{}
 
 func (e *ReconnectSuccessEvent) IsListenableClientEvent() {}
+func (*ReconnectSuccessEvent) ToDistributableEvent() DistributableEvent {
+	return nil
+}
 
 // ReconnectFailEvent is emitted when the client's reconnect loop fails
 // repeatedly and gives up (or when an error occurs during reconnect).
@@ -274,3 +386,180 @@ type ReconnectFailEvent struct {
 }
 
 func (e *ReconnectFailEvent) IsListenableClientEvent() {}
+func (*ReconnectFailEvent) ToDistributableEvent() DistributableEvent {
+	return nil
+}
+
+/*
+Key Data generation section
+*/
+
+// Interface for api event key data structures. They must contain
+// a BuildKey function to return an api event key based on the field
+// values of the key data instance.
+type apiEventKeyData = datatypes.APIEventKeyData
+
+// KeyDataSpotEvent is the type for ProtoOASpotEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataSpotEvent struct {
+	Ctid     CtraderAccountId
+	SymbolId int64
+	Period   ProtoOATrendbarPeriod
+}
+
+func (k *KeyDataSpotEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("SpotEvent__Ctid:%d__SymbolId:%d__TrendbarPeriod:%d",
+		k.Ctid,
+		k.SymbolId,
+		k.Period,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataDepthEvent is the type for ProtoOADepthEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataDepthEvent struct {
+	Ctid     CtraderAccountId
+	SymbolId int64
+}
+
+func (k *KeyDataDepthEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("DepthEvent__Ctid:%d__SymbolId:%d",
+		k.Ctid,
+		k.SymbolId,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataTrailingSLChangedEvent is the type for ProtoOATrailingSLChangedEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataTrailingSLChangedEvent struct {
+	Ctid       CtraderAccountId
+	PositionId int64
+	OrderId    int64
+}
+
+func (k *KeyDataTrailingSLChangedEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("TrailingSLChangedEvent__Ctid:%d__PositionId:%d__OrderId:%d",
+		k.Ctid,
+		k.PositionId,
+		k.OrderId,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataSymbolChangedEvent is the type for ProtoOASymbolChangedEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataSymbolChangedEvent struct {
+	Ctid CtraderAccountId
+}
+
+func (k *KeyDataSymbolChangedEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("SymbolChangedEvent__Ctid:%d",
+		k.Ctid,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataTraderUpdatedEvent is the type for ProtoOATraderUpdatedEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataTraderUpdatedEvent struct {
+	Ctid CtraderAccountId
+}
+
+func (k *KeyDataTraderUpdatedEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("TraderUpdatedEvent__Ctid:%d",
+		k.Ctid,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataExecutionEvent is the type for ProtoOAExecutionEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataExecutionEvent struct {
+	Ctid       CtraderAccountId
+	PositionId int64
+	OrderId    int64
+	DealId     int64
+}
+
+func (k *KeyDataExecutionEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("ExecutionEvent__Ctid:%d__PositionId:%d__OrderId:%d__DealId:%d",
+		k.Ctid,
+		k.PositionId,
+		k.OrderId,
+		k.DealId,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataOrderErrorEvent is the type for ProtoOAOrderErrorEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataOrderErrorEvent struct {
+	Ctid       CtraderAccountId
+	PositionId int64
+	OrderId    int64
+}
+
+func (k *KeyDataOrderErrorEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("OrderErrorEvent__Ctid:%d__PositionId:%d__OrderId:%d",
+		k.Ctid,
+		k.PositionId,
+		k.OrderId,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataMarginChangedEvent is the type for ProtoOAMarginChangedEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataMarginChangedEvent struct {
+	Ctid       CtraderAccountId
+	PositionId int64
+}
+
+func (k *KeyDataMarginChangedEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("MarginChangedEvent__Ctid:%d__PositionId:%d",
+		k.Ctid,
+		k.PositionId,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataAccountDisconnectEvent is the type for ProtoOAAccountDisconnectEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataAccountDisconnectEvent struct {
+	Ctid CtraderAccountId
+}
+
+func (k *KeyDataAccountDisconnectEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("AccountDisconnectEvent__Ctid:%d",
+		k.Ctid,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataMarginCallUpdateEvent is the type for ProtoOAMarginCallUpdateEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataMarginCallUpdateEvent struct {
+	Ctid CtraderAccountId
+}
+
+func (k *KeyDataMarginCallUpdateEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("MarginCallUpdateEvent__Ctid:%d",
+		k.Ctid,
+	)
+	return apiEventKey(key)
+}
+
+// KeyDataMarginCallTriggerEvent is the type for ProtoOAMarginCallTriggerEvent key generation.
+// Used in ListenToAPIEvent.
+type KeyDataMarginCallTriggerEvent struct {
+	Ctid CtraderAccountId
+}
+
+func (k *KeyDataMarginCallTriggerEvent) BuildKey() apiEventKey {
+	key := fmt.Sprintf("MarginCallTriggerEvent__Ctid:%d",
+		k.Ctid,
+	)
+	return apiEventKey(key)
+}

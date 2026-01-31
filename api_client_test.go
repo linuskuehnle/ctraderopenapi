@@ -190,7 +190,7 @@ func TestListenToFatalError(t *testing.T) {
 			close(errCh)
 		})
 	}
-	if err := c.ListenToClientEvent(ctx, ClientEventType_FatalErrorEvent, fatalErrCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_FatalErrorEvent, fatalErrCh}); err != nil {
 		t.Fatalf("error listening to fatal error client event: %v", err)
 	}
 	if err := SpawnClientEventHandler(ctx, fatalErrCh, onFatalErr); err != nil {
@@ -207,7 +207,7 @@ func TestListenToFatalError(t *testing.T) {
 			wg.Done()
 		})
 	}
-	if err := c.ListenToClientEvent(ctx, ClientEventType_ReconnectSuccessEvent, recSuccCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ReconnectSuccessEvent, recSuccCh}); err != nil {
 		t.Fatalf("error listening to reconnect success client event: %v", err)
 	}
 	if err := SpawnClientEventHandler(ctx, recSuccCh, onRecSucc); err != nil {
@@ -351,13 +351,13 @@ func TestReconnect(t *testing.T) {
 		t.Logf("reconnect failed: %v", e.Err)
 	}
 
-	if err := c.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, onConnLossCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ConnectionLossEvent, onConnLossCh}); err != nil {
 		t.Fatalf("error listening to connection loss events: %v", err)
 	}
-	if err := c.ListenToClientEvent(ctx, ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh}); err != nil {
 		t.Fatalf("error listening to reconnect success events: %v", err)
 	}
-	if err := c.ListenToClientEvent(ctx, ClientEventType_ReconnectFailEvent, onReconnectFailCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ReconnectFailEvent, onReconnectFailCh}); err != nil {
 		t.Fatalf("error listening to reconnect failure events: %v", err)
 	}
 
@@ -509,7 +509,7 @@ func TestBatchRequestSendOnConnLoss(t *testing.T) {
 		t.Fatalf("error starting connection loss client event handler: %v", err)
 	}
 
-	if err := c.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, connLossCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ConnectionLossEvent, connLossCh}); err != nil {
 		t.Fatalf("error listening to connection loss client event: %v", err)
 	}
 
@@ -579,7 +579,7 @@ func TestPreElectReqCtxCancel(t *testing.T) {
 		t.Fatalf("error starting connection loss client event handler: %v", err)
 	}
 
-	if err := c.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, connLossCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ConnectionLossEvent, connLossCh}); err != nil {
 		t.Fatalf("error listening to connection loss client event: %v", err)
 	}
 
@@ -673,4 +673,116 @@ func TestPreElectReqCtxCancelBackpressure(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestDisabledDefaultRateLimiter(t *testing.T) {
+	/*
+		TestGetSymbols mock
+	*/
+	accountId, accessToken, env, err := loadTestAccountCredentials()
+	if err != nil {
+		t.Fatalf("error loading test account credentials: %v", err)
+	}
+	c, err := createApiClient(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.DisableDefaultRateLimiter()
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+	defer c.Disconnect()
+
+	if _, err = c.AuthenticateAccount(CtraderAccountId(accountId), AccessToken(accessToken)); err != nil {
+		t.Fatal(err)
+	}
+
+	reqData := RequestData{
+		ReqType: PROTO_OA_SYMBOLS_LIST_REQ,
+		Req: &ProtoOASymbolsListReq{
+			CtidTraderAccountId:    proto.Int64(accountId),
+			IncludeArchivedSymbols: proto.Bool(false),
+		},
+		ResType: PROTO_OA_SYMBOLS_LIST_RES,
+		Res:     &ProtoOASymbolsListRes{},
+	}
+
+	if err = c.SendRequest(reqData); err != nil {
+		t.Fatalf("error sending request: %v", err)
+	}
+
+	/*
+		TestReconnect mock
+	*/
+	var once1 sync.Once
+	var once2 sync.Once
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	onConnLossCh := make(chan ClientEvent)
+	onReconnectSuccessCh := make(chan ClientEvent)
+	onReconnectFailCh := make(chan ClientEvent)
+
+	onConnectionLoss := func(e *ConnectionLossEvent) {
+		once1.Do(func() {
+			t.Log("closed tcp conn. waiting for reconnect...")
+		})
+	}
+	onReconnectSuccess := func(e *ReconnectSuccessEvent) {
+		// On reconnect success
+		t.Log("reconnect successful")
+
+		once2.Do(func() {
+			wg.Done()
+		})
+	}
+	onReconnectFail := func(e *ReconnectFailEvent) {
+		// On reconnect failure
+		t.Logf("reconnect failed: %v", e.Err)
+	}
+
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ConnectionLossEvent, onConnLossCh}); err != nil {
+		t.Fatalf("error listening to connection loss events: %v", err)
+	}
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ReconnectSuccessEvent, onReconnectSuccessCh}); err != nil {
+		t.Fatalf("error listening to reconnect success events: %v", err)
+	}
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ReconnectFailEvent, onReconnectFailCh}); err != nil {
+		t.Fatalf("error listening to reconnect failure events: %v", err)
+	}
+
+	if err := SpawnClientEventHandler(ctx, onConnLossCh, onConnectionLoss); err != nil {
+		t.Fatalf("error spawning connection loss event handler: %v", err)
+	}
+	if err := SpawnClientEventHandler(ctx, onReconnectSuccessCh, onReconnectSuccess); err != nil {
+		t.Fatalf("error spawning reconnect success event handler: %v", err)
+	}
+	if err := SpawnClientEventHandler(ctx, onReconnectFailCh, onReconnectFail); err != nil {
+		t.Fatalf("error spawning reconnect failure event handler: %v", err)
+	}
+
+	c.tcpClient.JustCloseConn()
+
+	// Wait for reconnect to complete
+	wg.Wait()
+	cancel()
+
+	// Make a request to verify connection is working
+
+	reqData = RequestData{
+		ReqType: PROTO_OA_VERSION_REQ,
+		Req: &ProtoOAVersionReq{
+			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+		},
+		ResType: PROTO_OA_VERSION_RES,
+		Res:     &ProtoOAVersionRes{},
+	}
+
+	if err := c.SendRequest(reqData); err != nil {
+		t.Fatalf("error getting proxy version: %v", err)
+		return
+	}
 }

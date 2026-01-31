@@ -18,94 +18,199 @@ import (
 	"sync"
 )
 
-type EventId int32
+// EventHandler is the type used for distributing API events to
+// specific channels based on subscription keys.
+type EventHandler[T BaseEvent] interface {
+	HasListenerSource(eventType EventType) bool
 
-type EventHandler[T any] interface {
+	SetDefaultListener(eventType EventType, eventCh chan T) error
+	UnsetDefaultListener(eventType EventType) error
+	SetListener(eventType EventType, keyData APIEventKeyData, eventCh chan T) error
+	UnsetListener(eventType EventType, keyData APIEventKeyData) error
+
+	HandleEvent(eventType EventType, event T) error
+}
+
+type IEventHandler[T BaseEvent] interface {
+	EventHandler[T]
 	Clear()
-
-	HasEvent(eventId EventId) bool
-	HandleEvent(eventId EventId, event T) bool
-	AddEvent(eventId EventId, onEvent func(T)) error
-	RemoveEvent(eventId EventId) error
 }
 
-type eventHandler[T any] struct {
-	mu        sync.RWMutex
-	eventsMap map[EventId]func(T)
+type eventHandler[T BaseEvent] struct {
+	mu sync.RWMutex
+
+	listenerSource   map[EventType]chan T
+	defaultListeners map[EventType]chan T
+	listeners        map[APIEventKey]chan T
 }
 
-func NewEventHandler[T any]() EventHandler[T] {
+func NewEventHandler[T BaseEvent]() EventHandler[T] {
 	return newEventHandler[T]()
 }
 
-func newEventHandler[T any]() *eventHandler[T] {
-	return &eventHandler[T]{
-		mu:        sync.RWMutex{},
-		eventsMap: make(map[EventId]func(T)),
+func NewIEventHandler[T BaseEvent]() IEventHandler[T] {
+	return newEventHandler[T]()
+}
+
+func newEventHandler[T BaseEvent]() *eventHandler[T] {
+	d := &eventHandler[T]{
+		mu: sync.RWMutex{},
+
+		listenerSource:   make(map[EventType]chan T),
+		defaultListeners: make(map[EventType]chan T),
+		listeners:        make(map[APIEventKey]chan T),
 	}
+
+	return d
 }
 
-func (h *eventHandler[T]) Clear() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (d *eventHandler[T]) Clear() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	h.eventsMap = make(map[EventId]func(T))
+	// Close all listener source channels
+	for _, ch := range d.listenerSource {
+		close(ch)
+	}
+
+	d.listenerSource = make(map[EventType]chan T)
+	d.defaultListeners = make(map[EventType]chan T)
+	d.listeners = make(map[APIEventKey]chan T)
 }
 
-func (h *eventHandler[T]) HasEvent(eventId EventId) bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+func (d *eventHandler[T]) setListenerSource(eventType EventType) {
+	sourceCh := make(chan T)
+	d.listenerSource[eventType] = sourceCh
 
-	_, exists := h.eventsMap[eventId]
+	go d.executeEventListen(eventType, sourceCh)
+}
+
+func (d *eventHandler[T]) unsetListenerSource(eventType EventType) {
+	sourceCh := d.listenerSource[eventType]
+
+	close(sourceCh)
+	delete(d.listenerSource, eventType)
+}
+
+func (d *eventHandler[T]) HasListenerSource(eventType EventType) bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.hasListenerSource(eventType)
+}
+
+func (d *eventHandler[T]) hasListenerSource(eventType EventType) bool {
+	_, exists := d.listenerSource[eventType]
 	return exists
 }
 
-func (h *eventHandler[T]) HandleEvent(eventId EventId, event T) bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+func (d *eventHandler[T]) SetDefaultListener(eventType EventType, eventCh chan T) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	onEvent, exists := h.eventsMap[eventId]
+	if _, exists := d.defaultListeners[eventType]; exists {
+		return &ListenerAlreadySetError{callContext: "default listener", EventType: eventType}
+	}
+
+	if !d.hasListenerSource(eventType) {
+		d.setListenerSource(eventType)
+	}
+
+	d.defaultListeners[eventType] = eventCh
+	return nil
+}
+
+func (d *eventHandler[T]) UnsetDefaultListener(eventType EventType) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	listenerCh, exists := d.defaultListeners[eventType]
 	if !exists {
-		return false
+		return &ListenerNotSetError{callContext: "default listener", EventType: eventType}
 	}
 
-	if onEvent != nil {
-		onEvent(event)
-	}
-
-	return true
-}
-
-// Event: Live Trendbars
-func (h *eventHandler[T]) AddEvent(eventId EventId, onEvent func(T)) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	// Check if already added
-	if _, exists := h.eventsMap[eventId]; exists {
-		return &IdAlreadyIncludedError{
-			Id: eventId,
-		}
-	}
-
-	// Register onEvent callback
-	h.eventsMap[eventId] = onEvent
-
+	close(listenerCh)
+	delete(d.defaultListeners, eventType)
 	return nil
 }
-func (h *eventHandler[T]) RemoveEvent(eventId EventId) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
 
-	// Check if not subscribed
-	if _, exists := h.eventsMap[eventId]; !exists {
-		return &IdNotIncludedError{
-			Id: eventId,
-		}
+func (d *eventHandler[T]) SetListener(eventType EventType, keyData APIEventKeyData, eventCh chan T) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	key := keyData.BuildKey()
+
+	if _, exists := d.listeners[key]; exists {
+		return &ListenerAlreadySetError{callContext: "listener", EventType: eventType}
 	}
 
-	// Unregister onEvent callback
-	delete(h.eventsMap, eventId)
+	if !d.hasListenerSource(eventType) {
+		d.setListenerSource(eventType)
+	}
 
+	d.listeners[key] = eventCh
 	return nil
+}
+
+func (d *eventHandler[T]) UnsetListener(eventType EventType, keyData APIEventKeyData) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	key := keyData.BuildKey()
+
+	listenerCh, exists := d.listeners[key]
+	if !exists {
+		return &ListenerNotSetError{callContext: "listener", EventType: eventType}
+	}
+
+	close(listenerCh)
+	delete(d.listeners, key)
+	return nil
+}
+
+func (d *eventHandler[T]) HandleEvent(eventType EventType, event T) error {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	sourceCh, exists := d.listenerSource[eventType]
+	if !exists {
+		return &SourceChannelNotExistingError{EventType: eventType}
+	}
+
+	sourceCh <- event
+	return nil
+}
+
+func (d *eventHandler[T]) executeEventListen(eventType EventType, sourceCh chan T) {
+	for event := range sourceCh {
+		distrEvent := event.ToDistributableEvent()
+		isDistr := distrEvent != nil
+
+		d.mu.RLock()
+
+		var sentSpecific bool
+		if isDistr {
+			// Event is distributable
+			keys := distrEvent.BuildKeys()
+
+			for _, key := range keys {
+				listenerCh, hasListener := d.listeners[key]
+				if hasListener {
+					sentSpecific = true
+					listenerCh <- event
+					break
+				}
+			}
+		}
+
+		// Send to default listener if event was not sent to specific listener
+		if !sentSpecific {
+			defaultCh, hasDefaultListener := d.defaultListeners[eventType]
+			if hasDefaultListener {
+				defaultCh <- event
+			}
+		}
+
+		d.mu.RUnlock()
+	}
 }

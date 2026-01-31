@@ -100,24 +100,33 @@ func (e *AccountDisconnectConfirmClearedError) Error() string {
 }
 
 /*
-	event_handler.go
+event_handler.go
 */
 
-type IdAlreadyIncludedError struct {
-	Id        EventId
-	EventName string
+type ListenerAlreadySetError struct {
+	callContext string
+	EventType   EventType
 }
 
-func (e *IdAlreadyIncludedError) Error() string {
-	return fmt.Sprintf("id %d is already included in event handler %s", e.Id, e.EventName)
+func (e *ListenerAlreadySetError) Error() string {
+	return fmt.Sprintf("%s already set on event type %d", e.callContext, e.EventType)
 }
 
-type IdNotIncludedError struct {
-	Id EventId
+type ListenerNotSetError struct {
+	callContext string
+	EventType   EventType
 }
 
-func (e *IdNotIncludedError) Error() string {
-	return fmt.Sprintf("id %d is not included in event handler", e.Id)
+func (e *ListenerNotSetError) Error() string {
+	return fmt.Sprintf("%s not set on event type %d", e.callContext, e.EventType)
+}
+
+type SourceChannelNotExistingError struct {
+	EventType EventType
+}
+
+func (e *SourceChannelNotExistingError) Error() string {
+	return fmt.Sprintf("source channel does not exist for event type %d", e.EventType)
 }
 
 /*

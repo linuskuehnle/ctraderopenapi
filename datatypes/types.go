@@ -107,3 +107,19 @@ func newContextInstance() contextInstance {
 		cancelCtx: cancelCtx,
 	}
 }
+
+type EventType = messages.ProtoOAPayloadType
+
+type BaseEvent = messages.BaseEvent
+
+type APIEvent = messages.APIEvent
+
+type ClientEvent = messages.ClientEvent
+
+type DistributableEvent = messages.DistributableEvent
+
+type APIEventKey = messages.APIEventKey
+
+type APIEventKeyData interface {
+	BuildKey() APIEventKey
+}

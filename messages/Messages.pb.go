@@ -3795,20 +3795,22 @@ func (x *ProtoOAUnsubscribeSpotsRes) GetCtidTraderAccountId() int64 {
 type ProtoOASpotEvent struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PayloadType         *ProtoOAPayloadType    `protobuf:"varint,1,opt,name=payloadType,enum=ProtoOAPayloadType,def=2131" json:"payloadType,omitempty"`
-	CtidTraderAccountId *int64                 `protobuf:"varint,2,req,name=ctidTraderAccountId" json:"ctidTraderAccountId,omitempty"` // Unique identifier of the trader's account. Used to match responses to trader's accounts.
-	SymbolId            *int64                 `protobuf:"varint,3,req,name=symbolId" json:"symbolId,omitempty"`                       // Unique identifier of the Symbol in cTrader platform.
-	Bid                 *uint64                `protobuf:"varint,4,opt,name=bid" json:"bid,omitempty"`                                 // Bid price. Specified in 1/100000 of unit of a price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782)
-	Ask                 *uint64                `protobuf:"varint,5,opt,name=ask" json:"ask,omitempty"`                                 // Ask price. Specified in 1/100000 of unit of a price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782)
-	Trendbar            []*ProtoOATrendbar     `protobuf:"bytes,6,rep,name=trendbar" json:"trendbar,omitempty"`                        // Returns live trend bar. Requires subscription on the trend bars.
-	SessionClose        *uint64                `protobuf:"varint,7,opt,name=sessionClose" json:"sessionClose,omitempty"`               // Last session close. Specified in 1/100000 of unit of a price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782)
-	Timestamp           *int64                 `protobuf:"varint,8,opt,name=timestamp" json:"timestamp,omitempty"`                     // The Unix time for spot.
+	CtidTraderAccountId *int64                 `protobuf:"varint,2,req,name=ctidTraderAccountId" json:"ctidTraderAccountId,omitempty"`                        // Unique identifier of the trader's account. Used to match responses to trader's accounts.
+	SymbolId            *int64                 `protobuf:"varint,3,req,name=symbolId" json:"symbolId,omitempty"`                                              // Unique identifier of the Symbol in cTrader platform.
+	Bid                 *uint64                `protobuf:"varint,4,opt,name=bid" json:"bid,omitempty"`                                                        // Bid price. Specified in 1/100000 of unit of a price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782)
+	Ask                 *uint64                `protobuf:"varint,5,opt,name=ask" json:"ask,omitempty"`                                                        // Ask price. Specified in 1/100000 of unit of a price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782)
+	Trendbar            []*ProtoOATrendbar     `protobuf:"bytes,6,rep,name=trendbar" json:"trendbar,omitempty"`                                               // Returns live trend bar. Requires subscription on the trend bars.
+	SessionClose        *uint64                `protobuf:"varint,7,opt,name=sessionClose" json:"sessionClose,omitempty"`                                      // Last session close. Specified in 1/100000 of unit of a price. (e.g. 123000 in protocol means 1.23, 53423782 means 534.23782)
+	Timestamp           *int64                 `protobuf:"varint,8,opt,name=timestamp" json:"timestamp,omitempty"`                                            // The Unix time for spot.
+	TrendbarPeriod      *ProtoOATrendbarPeriod `protobuf:"varint,9,opt,name=trendbarPeriod,enum=ProtoOATrendbarPeriod,def=1" json:"trendbarPeriod,omitempty"` // Bar period of all ProtoOATrendbar instances in field trendbar. Manually added in "github.com/linuskuehnle/ctraderopenapi"
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 // Default values for ProtoOASpotEvent fields.
 const (
-	Default_ProtoOASpotEvent_PayloadType = ProtoOAPayloadType_PROTO_OA_SPOT_EVENT
+	Default_ProtoOASpotEvent_PayloadType    = ProtoOAPayloadType_PROTO_OA_SPOT_EVENT
+	Default_ProtoOASpotEvent_TrendbarPeriod = ProtoOATrendbarPeriod_M1
 )
 
 func (x *ProtoOASpotEvent) Reset() {
@@ -3895,6 +3897,13 @@ func (x *ProtoOASpotEvent) GetTimestamp() int64 {
 		return *x.Timestamp
 	}
 	return 0
+}
+
+func (x *ProtoOASpotEvent) GetTrendbarPeriod() ProtoOATrendbarPeriod {
+	if x != nil && x.TrendbarPeriod != nil {
+		return *x.TrendbarPeriod
+	}
+	return Default_ProtoOASpotEvent_TrendbarPeriod
 }
 
 // * Request for subscribing for live trend bars. Requires subscription on the spot events, see ProtoOASubscribeSpotsReq.
@@ -6780,7 +6789,7 @@ const file_Messages_proto_rawDesc = "" +
 	"\bsymbolId\x18\x03 \x03(\x03R\bsymbolId\"\xa5\x01\n" +
 	"\x1aProtoOAUnsubscribeSpotsRes\x12U\n" +
 	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:\x1ePROTO_OA_UNSUBSCRIBE_SPOTS_RESR\vpayloadType\x120\n" +
-	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\"\xc0\x02\n" +
+	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\"\x84\x03\n" +
 	"\x10ProtoOASpotEvent\x12J\n" +
 	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:\x13PROTO_OA_SPOT_EVENTR\vpayloadType\x120\n" +
 	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\x12\x1a\n" +
@@ -6789,7 +6798,8 @@ const file_Messages_proto_rawDesc = "" +
 	"\x03ask\x18\x05 \x01(\x04R\x03ask\x12,\n" +
 	"\btrendbar\x18\x06 \x03(\v2\x10.ProtoOATrendbarR\btrendbar\x12\"\n" +
 	"\fsessionClose\x18\a \x01(\x04R\fsessionClose\x12\x1c\n" +
-	"\ttimestamp\x18\b \x01(\x03R\ttimestamp\"\xfc\x01\n" +
+	"\ttimestamp\x18\b \x01(\x03R\ttimestamp\x12B\n" +
+	"\x0etrendbarPeriod\x18\t \x01(\x0e2\x16.ProtoOATrendbarPeriod:\x02M1R\x0etrendbarPeriod\"\xfc\x01\n" +
 	"\x1fProtoOASubscribeLiveTrendbarReq\x12[\n" +
 	"\vpayloadType\x18\x01 \x01(\x0e2\x13.ProtoOAPayloadType:$PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQR\vpayloadType\x120\n" +
 	"\x13ctidTraderAccountId\x18\x02 \x02(\x03R\x13ctidTraderAccountId\x12.\n" +
@@ -7186,71 +7196,72 @@ var file_Messages_proto_depIdxs = []int32{
 	89,  // 78: ProtoOAUnsubscribeSpotsRes.payloadType:type_name -> ProtoOAPayloadType
 	89,  // 79: ProtoOASpotEvent.payloadType:type_name -> ProtoOAPayloadType
 	109, // 80: ProtoOASpotEvent.trendbar:type_name -> ProtoOATrendbar
-	89,  // 81: ProtoOASubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
-	110, // 82: ProtoOASubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
-	89,  // 83: ProtoOASubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 84: ProtoOAUnsubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
-	110, // 85: ProtoOAUnsubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
-	89,  // 86: ProtoOAUnsubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 87: ProtoOAGetTrendbarsReq.payloadType:type_name -> ProtoOAPayloadType
-	110, // 88: ProtoOAGetTrendbarsReq.period:type_name -> ProtoOATrendbarPeriod
-	89,  // 89: ProtoOAGetTrendbarsRes.payloadType:type_name -> ProtoOAPayloadType
-	110, // 90: ProtoOAGetTrendbarsRes.period:type_name -> ProtoOATrendbarPeriod
-	109, // 91: ProtoOAGetTrendbarsRes.trendbar:type_name -> ProtoOATrendbar
-	89,  // 92: ProtoOAGetTickDataReq.payloadType:type_name -> ProtoOAPayloadType
-	111, // 93: ProtoOAGetTickDataReq.type:type_name -> ProtoOAQuoteType
-	89,  // 94: ProtoOAGetTickDataRes.payloadType:type_name -> ProtoOAPayloadType
-	112, // 95: ProtoOAGetTickDataRes.tickData:type_name -> ProtoOATickData
-	89,  // 96: ProtoOAGetCtidProfileByTokenReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 97: ProtoOAGetCtidProfileByTokenRes.payloadType:type_name -> ProtoOAPayloadType
-	113, // 98: ProtoOAGetCtidProfileByTokenRes.profile:type_name -> ProtoOACtidProfile
-	89,  // 99: ProtoOADepthEvent.payloadType:type_name -> ProtoOAPayloadType
-	114, // 100: ProtoOADepthEvent.newQuotes:type_name -> ProtoOADepthQuote
-	89,  // 101: ProtoOASubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 102: ProtoOASubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 103: ProtoOAUnsubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 104: ProtoOAUnsubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 105: ProtoOASymbolCategoryListReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 106: ProtoOASymbolCategoryListRes.payloadType:type_name -> ProtoOAPayloadType
-	115, // 107: ProtoOASymbolCategoryListRes.symbolCategory:type_name -> ProtoOASymbolCategory
-	89,  // 108: ProtoOAAccountLogoutReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 109: ProtoOAAccountLogoutRes.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 110: ProtoOAAccountDisconnectEvent.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 111: ProtoOAMarginCallListReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 112: ProtoOAMarginCallListRes.payloadType:type_name -> ProtoOAPayloadType
-	116, // 113: ProtoOAMarginCallListRes.marginCall:type_name -> ProtoOAMarginCall
-	89,  // 114: ProtoOAMarginCallUpdateReq.payloadType:type_name -> ProtoOAPayloadType
-	116, // 115: ProtoOAMarginCallUpdateReq.marginCall:type_name -> ProtoOAMarginCall
-	89,  // 116: ProtoOAMarginCallUpdateRes.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 117: ProtoOAMarginCallUpdateEvent.payloadType:type_name -> ProtoOAPayloadType
-	116, // 118: ProtoOAMarginCallUpdateEvent.marginCall:type_name -> ProtoOAMarginCall
-	89,  // 119: ProtoOAMarginCallTriggerEvent.payloadType:type_name -> ProtoOAPayloadType
-	116, // 120: ProtoOAMarginCallTriggerEvent.marginCall:type_name -> ProtoOAMarginCall
-	89,  // 121: ProtoOAGetDynamicLeverageByIDReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 122: ProtoOAGetDynamicLeverageByIDRes.payloadType:type_name -> ProtoOAPayloadType
-	117, // 123: ProtoOAGetDynamicLeverageByIDRes.leverage:type_name -> ProtoOADynamicLeverage
-	89,  // 124: ProtoOADealListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 125: ProtoOADealListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
-	97,  // 126: ProtoOADealListByPositionIdRes.deal:type_name -> ProtoOADeal
-	89,  // 127: ProtoOAOrderDetailsReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 128: ProtoOAOrderDetailsRes.payloadType:type_name -> ProtoOAPayloadType
-	96,  // 129: ProtoOAOrderDetailsRes.order:type_name -> ProtoOAOrder
-	97,  // 130: ProtoOAOrderDetailsRes.deal:type_name -> ProtoOADeal
-	89,  // 131: ProtoOAOrderListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 132: ProtoOAOrderListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
-	96,  // 133: ProtoOAOrderListByPositionIdRes.order:type_name -> ProtoOAOrder
-	89,  // 134: ProtoOADealOffsetListReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 135: ProtoOADealOffsetListRes.payloadType:type_name -> ProtoOAPayloadType
-	118, // 136: ProtoOADealOffsetListRes.offsetBy:type_name -> ProtoOADealOffset
-	118, // 137: ProtoOADealOffsetListRes.offsetting:type_name -> ProtoOADealOffset
-	89,  // 138: ProtoOAGetPositionUnrealizedPnLReq.payloadType:type_name -> ProtoOAPayloadType
-	89,  // 139: ProtoOAGetPositionUnrealizedPnLRes.payloadType:type_name -> ProtoOAPayloadType
-	119, // 140: ProtoOAGetPositionUnrealizedPnLRes.positionUnrealizedPnL:type_name -> ProtoOAPositionUnrealizedPnL
-	141, // [141:141] is the sub-list for method output_type
-	141, // [141:141] is the sub-list for method input_type
-	141, // [141:141] is the sub-list for extension type_name
-	141, // [141:141] is the sub-list for extension extendee
-	0,   // [0:141] is the sub-list for field type_name
+	110, // 81: ProtoOASpotEvent.trendbarPeriod:type_name -> ProtoOATrendbarPeriod
+	89,  // 82: ProtoOASubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
+	110, // 83: ProtoOASubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
+	89,  // 84: ProtoOASubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 85: ProtoOAUnsubscribeLiveTrendbarReq.payloadType:type_name -> ProtoOAPayloadType
+	110, // 86: ProtoOAUnsubscribeLiveTrendbarReq.period:type_name -> ProtoOATrendbarPeriod
+	89,  // 87: ProtoOAUnsubscribeLiveTrendbarRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 88: ProtoOAGetTrendbarsReq.payloadType:type_name -> ProtoOAPayloadType
+	110, // 89: ProtoOAGetTrendbarsReq.period:type_name -> ProtoOATrendbarPeriod
+	89,  // 90: ProtoOAGetTrendbarsRes.payloadType:type_name -> ProtoOAPayloadType
+	110, // 91: ProtoOAGetTrendbarsRes.period:type_name -> ProtoOATrendbarPeriod
+	109, // 92: ProtoOAGetTrendbarsRes.trendbar:type_name -> ProtoOATrendbar
+	89,  // 93: ProtoOAGetTickDataReq.payloadType:type_name -> ProtoOAPayloadType
+	111, // 94: ProtoOAGetTickDataReq.type:type_name -> ProtoOAQuoteType
+	89,  // 95: ProtoOAGetTickDataRes.payloadType:type_name -> ProtoOAPayloadType
+	112, // 96: ProtoOAGetTickDataRes.tickData:type_name -> ProtoOATickData
+	89,  // 97: ProtoOAGetCtidProfileByTokenReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 98: ProtoOAGetCtidProfileByTokenRes.payloadType:type_name -> ProtoOAPayloadType
+	113, // 99: ProtoOAGetCtidProfileByTokenRes.profile:type_name -> ProtoOACtidProfile
+	89,  // 100: ProtoOADepthEvent.payloadType:type_name -> ProtoOAPayloadType
+	114, // 101: ProtoOADepthEvent.newQuotes:type_name -> ProtoOADepthQuote
+	89,  // 102: ProtoOASubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 103: ProtoOASubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 104: ProtoOAUnsubscribeDepthQuotesReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 105: ProtoOAUnsubscribeDepthQuotesRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 106: ProtoOASymbolCategoryListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 107: ProtoOASymbolCategoryListRes.payloadType:type_name -> ProtoOAPayloadType
+	115, // 108: ProtoOASymbolCategoryListRes.symbolCategory:type_name -> ProtoOASymbolCategory
+	89,  // 109: ProtoOAAccountLogoutReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 110: ProtoOAAccountLogoutRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 111: ProtoOAAccountDisconnectEvent.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 112: ProtoOAMarginCallListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 113: ProtoOAMarginCallListRes.payloadType:type_name -> ProtoOAPayloadType
+	116, // 114: ProtoOAMarginCallListRes.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 115: ProtoOAMarginCallUpdateReq.payloadType:type_name -> ProtoOAPayloadType
+	116, // 116: ProtoOAMarginCallUpdateReq.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 117: ProtoOAMarginCallUpdateRes.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 118: ProtoOAMarginCallUpdateEvent.payloadType:type_name -> ProtoOAPayloadType
+	116, // 119: ProtoOAMarginCallUpdateEvent.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 120: ProtoOAMarginCallTriggerEvent.payloadType:type_name -> ProtoOAPayloadType
+	116, // 121: ProtoOAMarginCallTriggerEvent.marginCall:type_name -> ProtoOAMarginCall
+	89,  // 122: ProtoOAGetDynamicLeverageByIDReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 123: ProtoOAGetDynamicLeverageByIDRes.payloadType:type_name -> ProtoOAPayloadType
+	117, // 124: ProtoOAGetDynamicLeverageByIDRes.leverage:type_name -> ProtoOADynamicLeverage
+	89,  // 125: ProtoOADealListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 126: ProtoOADealListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
+	97,  // 127: ProtoOADealListByPositionIdRes.deal:type_name -> ProtoOADeal
+	89,  // 128: ProtoOAOrderDetailsReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 129: ProtoOAOrderDetailsRes.payloadType:type_name -> ProtoOAPayloadType
+	96,  // 130: ProtoOAOrderDetailsRes.order:type_name -> ProtoOAOrder
+	97,  // 131: ProtoOAOrderDetailsRes.deal:type_name -> ProtoOADeal
+	89,  // 132: ProtoOAOrderListByPositionIdReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 133: ProtoOAOrderListByPositionIdRes.payloadType:type_name -> ProtoOAPayloadType
+	96,  // 134: ProtoOAOrderListByPositionIdRes.order:type_name -> ProtoOAOrder
+	89,  // 135: ProtoOADealOffsetListReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 136: ProtoOADealOffsetListRes.payloadType:type_name -> ProtoOAPayloadType
+	118, // 137: ProtoOADealOffsetListRes.offsetBy:type_name -> ProtoOADealOffset
+	118, // 138: ProtoOADealOffsetListRes.offsetting:type_name -> ProtoOADealOffset
+	89,  // 139: ProtoOAGetPositionUnrealizedPnLReq.payloadType:type_name -> ProtoOAPayloadType
+	89,  // 140: ProtoOAGetPositionUnrealizedPnLRes.payloadType:type_name -> ProtoOAPayloadType
+	119, // 141: ProtoOAGetPositionUnrealizedPnLRes.positionUnrealizedPnL:type_name -> ProtoOAPositionUnrealizedPnL
+	142, // [142:142] is the sub-list for method output_type
+	142, // [142:142] is the sub-list for method input_type
+	142, // [142:142] is the sub-list for extension type_name
+	142, // [142:142] is the sub-list for extension extendee
+	0,   // [0:142] is the sub-list for field type_name
 }
 
 func init() { file_Messages_proto_init() }

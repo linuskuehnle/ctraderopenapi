@@ -80,16 +80,16 @@ full comments and examples):
 		unmarshals the response into the provided response object.
 	
 	**Event subscriptions:**
-	- `SubscribeAPIEvent(APIEventData)` / `UnsubscribeAPIEvent(...)` —
+	- `SubscribeAPIEvent(APIEventSubData)` / `UnsubscribeAPIEvent(...)` —
 		subscribe/unsubscribe for server-side subscription-based events.
 	- `SubscribeClientEvent(SubscribableClientEventData)` / `UnsubscribeClientEvent(...)` —
 		subscribe/unsubscribe for client-side events.
 	
 	**Event listening:**
-	- `ListenToAPIEvent(ctx, eventType, chan APIEvent)` — register a
-		long-running listener channel for push events.
-	- `ListenToClientEvent(ctx, clientEventType, chan ClientEvent)`
-		— listen for client-side events (connection loss, reconnect events, fatal errors).
+	- `ListenToAPIEvent(ctx, APIEventListenData)` — register a long-running listener channel for push events.
+		APIEventListenData includes optional `EventKeyData` for fine-grained filtering (e.g., by account ID and symbol ID).
+	- `ListenToClientEvent(ctx, ClientEventListenData)` — listen for client-side events
+		(connection loss, reconnect events, fatal errors).
 	
 	**Client event types:** Fatal client errors, connection loss, reconnect success, and reconnect fail.
 	
@@ -131,10 +131,17 @@ full comments and examples):
 
 - Event helpers and adapters:
 	- `APIEvent` and `ClientEvent` — marker interfaces for event types.
-	- `CastToEventType[T]` and `CastToClientEventType[T]` — helpers to cast generic event types
+	- `CastToAPIEventType[T]` and `CastToClientEventType[T]` — helpers to cast generic event types
 		to concrete event types.
 	- `SpawnAPIEventHandler` and `SpawnClientEventHandler` — start small goroutines that forward
 		typed events to your handler, eliminating the need for manual type assertions.
+
+- Fine-grained event filtering:
+	- `APIEventListenData` and `ClientEventListenData` — data structures for configuring event listeners.
+	- `EventKeyData` — optional parameter in `APIEventListenData` for filtering events by subscription-specific criteria
+		(e.g., account ID and symbol ID for spot events). When nil, all events of the specified type are delivered.
+	- `KeyDataSpotEvent`, `KeyDataDepthEvent`, `KeyDataTrailingSLChangedEvent`, etc. — concrete key data types
+		for filtering specific event subtypes.
 
 ## Examples
 
@@ -270,7 +277,16 @@ ctx, cancel := context.WithCancel(context.Background())
 defer cancel()
 
 onEventCh := make(chan ctraderopenapi.APIEvent)
-if err := client.ListenToAPIEvent(ctx, ctraderopenapi.APIEventType_Spots, onEventCh); err != nil {
+listenData := ctraderopenapi.APIEventListenData{
+	EventType:    ctraderopenapi.APIEventType_Spots,
+	EventCh:      onEventCh,
+	EventKeyData: &ctraderopenapi.KeyDataSpotEvent{
+		Ctid:     ctraderopenapi.CtraderAccountId(123456),
+		SymbolId: 1,
+		Period:   ctraderopenapi.ProtoOATrendbarPeriod_M1,
+	},
+}
+if err := client.ListenToAPIEvent(ctx, listenData); err != nil {
 	panic(err)
 }
 
@@ -278,7 +294,7 @@ _ = ctraderopenapi.SpawnAPIEventHandler(ctx, onEventCh, func(e *ctraderopenapi.P
 	fmt.Println("spot event:", e)
 })
 
-sub := ctraderopenapi.APIEventData{
+sub := ctraderopenapi.APIEventSubData{
 	EventType: ctraderopenapi.EventType_Spots,
 	SubcriptionData: &ctraderopenapi.SpotEventData{
 		CtraderAccountId: ctraderopenapi.CtraderAccountId(123456),
@@ -295,7 +311,11 @@ if err := client.SubscribeAPIEvent(sub); err != nil {
 ```go
 
 clientCh := make(chan ctraderopenapi.ClientEvent)
-if err := client.ListenToClientEvent(context.Background(), ctraderopenapi.ClientEventType_ReconnectSuccessEvent, clientCh); err != nil {
+listenData := ctraderopenapi.ClientEventListenData{
+	EventType: ctraderopenapi.ClientEventType_ReconnectSuccessEvent,
+	EventCh:   clientCh,
+}
+if err := client.ListenToClientEvent(context.Background(), listenData); err != nil {
 	panic(err)
 }
 ctraderopenapi.SpawnClientEventHandler(context.Background(), clientCh, func(e *ctraderopenapi.ReconnectSuccessEvent) {

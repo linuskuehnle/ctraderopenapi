@@ -43,7 +43,7 @@ func TestSubscribeUnsubscribeAPIEvent(t *testing.T) {
 	}
 
 	var symbolId int64 = 1 // "EURUSD, Spot CFD"
-	subData := APIEventData{
+	subData := APIEventSubData{
 		EventType: APIEventType_Spots,
 		SubcriptionData: &SpotEventData{
 			CtraderAccountId: CtraderAccountId(accountId),
@@ -87,21 +87,22 @@ func TestListenEvent(t *testing.T) {
 	eventCh := make(chan APIEvent)
 
 	go func() {
-		<-eventCh
-		once.Do(func() {
-			wg.Done()
-		})
+		for range eventCh {
+			once.Do(func() {
+				wg.Done()
+			})
+		}
 	}()
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	if err = c.ListenToAPIEvent(ctx, APIEventType_Spots, eventCh); err != nil {
+	if err = c.ListenToAPIEvent(ctx, APIEventListenData{APIEventType_Spots, eventCh, nil}); err != nil {
 		t.Fatalf("error registering event listener: %v", err)
 	}
 
 	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 
-	subData := APIEventData{
+	subData := APIEventSubData{
 		EventType: APIEventType_Spots,
 		SubcriptionData: &SpotEventData{
 			CtraderAccountId: CtraderAccountId(accountId),
@@ -145,7 +146,7 @@ func TestResubscribeOnReconnect(t *testing.T) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	var symbolId int64 = 1 // "EURUSD, Spot CFD"
-	subData := APIEventData{
+	subData := APIEventSubData{
 		EventType: APIEventType_Spots,
 		SubcriptionData: &SpotEventData{
 			CtraderAccountId: CtraderAccountId(accountId),
@@ -161,10 +162,11 @@ func TestResubscribeOnReconnect(t *testing.T) {
 	var onceSpots sync.Once
 	spotsEventCh := make(chan APIEvent)
 	go func() {
-		<-spotsEventCh
-		onceSpots.Do(func() {
-			wg.Done()
-		})
+		for range spotsEventCh {
+			onceSpots.Do(func() {
+				wg.Done()
+			})
+		}
 	}()
 
 	errCh := make(chan error)
@@ -174,14 +176,14 @@ func TestResubscribeOnReconnect(t *testing.T) {
 	go func() {
 		<-connLossCh
 		onceConnLoss.Do(func() {
-			if err = c.ListenToAPIEvent(ctx, APIEventType_Spots, spotsEventCh); err != nil {
+			if err = c.ListenToAPIEvent(ctx, APIEventListenData{APIEventType_Spots, spotsEventCh, nil}); err != nil {
 				errCh <- fmt.Errorf("error registering event listener: %v", err)
 			}
 			close(errCh)
 		})
 	}()
 
-	if err := c.ListenToClientEvent(ctx, ClientEventType_ConnectionLossEvent, connLossCh); err != nil {
+	if err := c.ListenToClientEvent(ctx, ClientEventListenData{ClientEventType_ConnectionLossEvent, connLossCh}); err != nil {
 		t.Fatalf("error listening to connection loss event: %v", err)
 	}
 
@@ -245,13 +247,13 @@ func TestListenEventWithSpawnAPIEventHandler(t *testing.T) {
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	if err = c.ListenToAPIEvent(ctx, APIEventType_Spots, eventCh); err != nil {
+	if err = c.ListenToAPIEvent(ctx, APIEventListenData{APIEventType_Spots, eventCh, nil}); err != nil {
 		t.Fatalf("error registering event listener: %v", err)
 	}
 
 	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 
-	subData := APIEventData{
+	subData := APIEventSubData{
 		EventType: APIEventType_Spots,
 		SubcriptionData: &SpotEventData{
 			CtraderAccountId: CtraderAccountId(accountId),
@@ -300,22 +302,26 @@ func TestLiveTrendbarEvent(t *testing.T) {
 	eventCh := make(chan APIEvent)
 
 	go func() {
-		for range eventCh {
-			once.Do(func() {
-				wg.Done()
-			})
+		for event := range eventCh {
+			spotEvent, _ := CastToAPIEventType[*ProtoOASpotEvent](event)
+
+			if len(spotEvent.GetTrendbar()) > 0 {
+				once.Do(func() {
+					wg.Done()
+				})
+			}
 		}
 	}()
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	if err = c.ListenToAPIEvent(ctx, APIEventType_Spots, eventCh); err != nil {
+	if err = c.ListenToAPIEvent(ctx, APIEventListenData{APIEventType_Spots, eventCh, nil}); err != nil {
 		t.Fatalf("error registering spots event listener: %v", err)
 	}
 
 	var symbolId int64 = 1 // "EURUSD, Spot CFD"
 
-	subDataLiveTrendbars := APIEventData{
+	subDataLiveTrendbars := APIEventSubData{
 		EventType: APIEventType_LiveTrendbars,
 		SubcriptionData: &LiveTrendbarEventData{
 			CtraderAccountId: CtraderAccountId(accountId),
@@ -333,7 +339,95 @@ func TestLiveTrendbarEvent(t *testing.T) {
 			"\"INVALID_REQUEST. Impossible to get trendbars before the spot subscribing\", got %v", err)
 	}
 
-	subDataSpots := APIEventData{
+	subDataSpots := APIEventSubData{
+		EventType: APIEventType_Spots,
+		SubcriptionData: &SpotEventData{
+			CtraderAccountId: CtraderAccountId(accountId),
+			SymbolIds:        []int64{symbolId},
+		},
+	}
+	if err = c.SubscribeAPIEvent(subDataSpots); err != nil {
+		t.Fatalf("error subscribing spots event: %v", err)
+	}
+
+	// Subscribe live trendbars after spots (expected to not return an error)
+	if err = c.SubscribeAPIEvent(subDataLiveTrendbars); err != nil {
+		t.Fatalf("error subscribing live trendbars event: %v", err)
+	}
+
+	// Wait for immediate event message
+	wg.Wait()
+
+	cancelCtx()
+
+	if err = c.UnsubscribeAPIEvent(subDataSpots); err != nil {
+		t.Fatalf("error unsubscribing spots event: %v", err)
+	}
+}
+
+// Test key based spot event listening
+func TestKeyBasedSpotListening(t *testing.T) {
+	// Add listener and cancel context
+	accountId, accessToken, env, err := loadTestAccountCredentials()
+	if err != nil {
+		t.Fatalf("error loading test account credentials: %v", err)
+	}
+	c, err := createApiClient(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = c.Connect(); err != nil {
+		t.Fatalf("error connecting: %v", err)
+	}
+	defer c.Disconnect()
+
+	if _, err = c.AuthenticateAccount(CtraderAccountId(accountId), AccessToken(accessToken)); err != nil {
+		t.Fatal(err)
+	}
+
+	wg := sync.WaitGroup{}
+	var once sync.Once
+
+	wg.Add(1)
+	keyEventCh := make(chan APIEvent)
+
+	go func() {
+		for event := range keyEventCh {
+			spotEvent, _ := CastToAPIEventType[*ProtoOASpotEvent](event)
+
+			if len(spotEvent.GetTrendbar()) > 0 {
+				once.Do(func() {
+					wg.Done()
+				})
+			}
+		}
+	}()
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
+	var symbolId int64 = 1 // "EURUSD, Spot CFD"
+	var period ProtoOATrendbarPeriod = ProtoOATrendbarPeriod_D1
+
+	keyData := KeyDataSpotEvent{
+		Ctid:     CtraderAccountId(accountId),
+		SymbolId: symbolId,
+		Period:   period,
+	}
+	if err = c.ListenToAPIEvent(ctx, APIEventListenData{APIEventType_Spots, keyEventCh, &keyData}); err != nil {
+		t.Fatalf("error registering key based spots event listener: %v", err)
+	}
+
+	subDataLiveTrendbars := APIEventSubData{
+		EventType: APIEventType_LiveTrendbars,
+		SubcriptionData: &LiveTrendbarEventData{
+			CtraderAccountId: CtraderAccountId(accountId),
+			SymbolId:         symbolId,
+			Period:           period,
+		},
+	}
+
+	subDataSpots := APIEventSubData{
 		EventType: APIEventType_Spots,
 		SubcriptionData: &SpotEventData{
 			CtraderAccountId: CtraderAccountId(accountId),
@@ -367,11 +461,11 @@ func TestClientEvents(t *testing.T) {
 	}
 
 	connLossCh := make(chan ClientEvent)
-	if err := c.ListenToClientEvent(context.Background(), ClientEventType_ConnectionLossEvent, connLossCh); err != nil {
+	if err := c.ListenToClientEvent(context.Background(), ClientEventListenData{ClientEventType_ConnectionLossEvent, connLossCh}); err != nil {
 		t.Fatalf("error registering connection loss event listener: %v", err)
 	}
 	reconnectSuccessCh := make(chan ClientEvent)
-	if err := c.ListenToClientEvent(context.Background(), ClientEventType_ReconnectSuccessEvent, reconnectSuccessCh); err != nil {
+	if err := c.ListenToClientEvent(context.Background(), ClientEventListenData{ClientEventType_ReconnectSuccessEvent, reconnectSuccessCh}); err != nil {
 		t.Fatalf("error registering connection loss event listener: %v", err)
 	}
 
