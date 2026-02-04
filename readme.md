@@ -175,9 +175,7 @@ func main() {
 	var res ctraderopenapi.ProtoOAVersionRes
 	reqData := ctraderopenapi.RequestData{
 		Ctx:     context.Background(),
-		ReqType: ctraderopenapi.PROTO_OA_VERSION_REQ,
 		Req:     &req,
-		ResType: ctraderopenapi.PROTO_OA_VERSION_RES,
 		Res:     &res,
 	}
 	if err := client.SendRequest(reqData); err != nil {
