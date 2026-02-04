@@ -15,7 +15,7 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/messages"
+	"github.com/linuskuehnle/ctraderopenapi/internal/messages"
 
 	"context"
 	"errors"
@@ -84,18 +84,16 @@ func TestClientReqConcurrency(t *testing.T) {
 			defer wg.Done()
 
 			req := ProtoOAVersionReq{
-				PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+				PayloadType: proto_OA_VERSION_REQ.Enum(),
 			}
 			var res ProtoOAVersionRes
 
 			reqCtx := context.Background()
 
 			reqData := RequestData{
-				Ctx:     reqCtx,
-				ReqType: PROTO_OA_VERSION_REQ,
-				Req:     &req,
-				ResType: PROTO_OA_VERSION_RES,
-				Res:     &res,
+				Ctx: reqCtx,
+				Req: &req,
+				Res: &res,
 			}
 
 			if err := c.SendRequest(reqData); err != nil {
@@ -145,11 +143,9 @@ func TestProtoOAErrorResponse(t *testing.T) {
 	reqCtx := context.Background()
 
 	reqData := RequestData{
-		Ctx:     reqCtx,
-		ReqType: PROTO_OA_GET_TRENDBARS_REQ,
-		Req:     &req,
-		ResType: PROTO_OA_GET_TRENDBARS_RES,
-		Res:     &res,
+		Ctx: reqCtx,
+		Req: &req,
+		Res: &res,
 	}
 
 	if err = c.SendRequest(reqData); err != nil {
@@ -302,13 +298,11 @@ func TestGetSymbols(t *testing.T) {
 	}
 
 	reqData := RequestData{
-		ReqType: PROTO_OA_SYMBOLS_LIST_REQ,
 		Req: &ProtoOASymbolsListReq{
 			CtidTraderAccountId:    proto.Int64(accountId),
 			IncludeArchivedSymbols: proto.Bool(false),
 		},
-		ResType: PROTO_OA_SYMBOLS_LIST_RES,
-		Res:     &ProtoOASymbolsListRes{},
+		Res: &ProtoOASymbolsListRes{},
 	}
 
 	if err = c.SendRequest(reqData); err != nil {
@@ -385,12 +379,10 @@ func TestReconnect(t *testing.T) {
 	// Make a request to verify connection is working
 
 	reqData := RequestData{
-		ReqType: PROTO_OA_VERSION_REQ,
 		Req: &ProtoOAVersionReq{
-			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+			PayloadType: proto_OA_VERSION_REQ.Enum(),
 		},
-		ResType: PROTO_OA_VERSION_RES,
-		Res:     &ProtoOAVersionRes{},
+		Res: &ProtoOAVersionRes{},
 	}
 
 	if err := c.SendRequest(reqData); err != nil {
@@ -427,18 +419,16 @@ func TestClientRateLimiter(t *testing.T) {
 			defer wg.Done()
 
 			req := ProtoOAVersionReq{
-				PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+				PayloadType: proto_OA_VERSION_REQ.Enum(),
 			}
 			var res ProtoOAVersionRes
 
 			reqCtx := context.Background()
 
 			reqData := RequestData{
-				Ctx:     reqCtx,
-				ReqType: PROTO_OA_VERSION_REQ,
-				Req:     &req,
-				ResType: PROTO_OA_VERSION_RES,
-				Res:     &res,
+				Ctx: reqCtx,
+				Req: &req,
+				Res: &res,
 			}
 
 			if err := c.SendRequest(reqData); err != nil {
@@ -483,18 +473,16 @@ func TestBatchRequestSendOnConnLoss(t *testing.T) {
 				defer wg.Done()
 
 				req := ProtoOAVersionReq{
-					PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+					PayloadType: proto_OA_VERSION_REQ.Enum(),
 				}
 				var res ProtoOAVersionRes
 
 				reqCtx := context.Background()
 
 				reqData := RequestData{
-					Ctx:     reqCtx,
-					ReqType: PROTO_OA_VERSION_REQ,
-					Req:     &req,
-					ResType: PROTO_OA_VERSION_RES,
-					Res:     &res,
+					Ctx: reqCtx,
+					Req: &req,
+					Res: &res,
 				}
 
 				if err := c.SendRequest(reqData); err != nil {
@@ -554,7 +542,7 @@ func TestPreElectReqCtxCancel(t *testing.T) {
 	connLossCh := make(chan ClientEvent)
 	onConnLoss := func(e *ConnectionLossEvent) {
 		req := ProtoOAVersionReq{
-			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+			PayloadType: proto_OA_VERSION_REQ.Enum(),
 		}
 		var res ProtoOAVersionRes
 
@@ -562,11 +550,9 @@ func TestPreElectReqCtxCancel(t *testing.T) {
 		cancelCtx()
 
 		reqData := RequestData{
-			Ctx:     ctx,
-			ReqType: PROTO_OA_VERSION_REQ,
-			Req:     &req,
-			ResType: PROTO_OA_VERSION_RES,
-			Res:     &res,
+			Ctx: ctx,
+			Req: &req,
+			Res: &res,
 		}
 
 		if err := c.SendRequest(reqData); err != nil {
@@ -625,18 +611,16 @@ func TestPreElectReqCtxCancelBackpressure(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			req := ProtoOAVersionReq{
-				PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+				PayloadType: proto_OA_VERSION_REQ.Enum(),
 			}
 			var res ProtoOAVersionRes
 
 			reqCtx := context.Background()
 
 			reqData := RequestData{
-				Ctx:     reqCtx,
-				ReqType: PROTO_OA_VERSION_REQ,
-				Req:     &req,
-				ResType: PROTO_OA_VERSION_RES,
-				Res:     &res,
+				Ctx: reqCtx,
+				Req: &req,
+				Res: &res,
 			}
 
 			c.SendRequest(reqData)
@@ -647,7 +631,7 @@ func TestPreElectReqCtxCancelBackpressure(t *testing.T) {
 
 	// Send the request with immediately cancelled context
 	req := ProtoOAVersionReq{
-		PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+		PayloadType: proto_OA_VERSION_REQ.Enum(),
 	}
 	var res ProtoOAVersionRes
 
@@ -655,11 +639,9 @@ func TestPreElectReqCtxCancelBackpressure(t *testing.T) {
 	cancelCtx()
 
 	reqData := RequestData{
-		Ctx:     ctx,
-		ReqType: PROTO_OA_VERSION_REQ,
-		Req:     &req,
-		ResType: PROTO_OA_VERSION_RES,
-		Res:     &res,
+		Ctx: ctx,
+		Req: &req,
+		Res: &res,
 	}
 
 	err = c.SendRequest(reqData)
@@ -699,13 +681,11 @@ func TestDisabledDefaultRateLimiter(t *testing.T) {
 	}
 
 	reqData := RequestData{
-		ReqType: PROTO_OA_SYMBOLS_LIST_REQ,
 		Req: &ProtoOASymbolsListReq{
 			CtidTraderAccountId:    proto.Int64(accountId),
 			IncludeArchivedSymbols: proto.Bool(false),
 		},
-		ResType: PROTO_OA_SYMBOLS_LIST_RES,
-		Res:     &ProtoOASymbolsListRes{},
+		Res: &ProtoOASymbolsListRes{},
 	}
 
 	if err = c.SendRequest(reqData); err != nil {
@@ -773,12 +753,10 @@ func TestDisabledDefaultRateLimiter(t *testing.T) {
 	// Make a request to verify connection is working
 
 	reqData = RequestData{
-		ReqType: PROTO_OA_VERSION_REQ,
 		Req: &ProtoOAVersionReq{
-			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+			PayloadType: proto_OA_VERSION_REQ.Enum(),
 		},
-		ResType: PROTO_OA_VERSION_RES,
-		Res:     &ProtoOAVersionRes{},
+		Res: &ProtoOAVersionRes{},
 	}
 
 	if err := c.SendRequest(reqData); err != nil {

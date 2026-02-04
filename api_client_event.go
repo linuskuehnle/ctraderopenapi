@@ -15,7 +15,7 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/messages"
+	"github.com/linuskuehnle/ctraderopenapi/internal/messages"
 
 	"context"
 	"errors"
@@ -65,13 +65,11 @@ func (c *apiClient) subscribeAPIEvent(eventData APIEventSubData, bypassReconnect
 
 		ctid = subData.CtraderAccountId
 		reqData = RequestData{
-			ReqType: PROTO_OA_SUBSCRIBE_SPOTS_REQ,
 			Req: &messages.ProtoOASubscribeSpotsReq{
 				CtidTraderAccountId: (*int64)(&ctid),
 				SymbolId:            subData.SymbolIds,
 			},
-			ResType: PROTO_OA_SUBSCRIBE_SPOTS_RES,
-			Res:     &messages.ProtoOASubscribeSpotsRes{},
+			Res: &messages.ProtoOASubscribeSpotsRes{},
 		}
 	case APIEventType_LiveTrendbars:
 		subData, ok := eventData.SubcriptionData.(*LiveTrendbarEventData)
@@ -84,14 +82,12 @@ func (c *apiClient) subscribeAPIEvent(eventData APIEventSubData, bypassReconnect
 
 		ctid = subData.CtraderAccountId
 		reqData = RequestData{
-			ReqType: PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ,
 			Req: &messages.ProtoOASubscribeLiveTrendbarReq{
 				CtidTraderAccountId: (*int64)(&ctid),
 				SymbolId:            &subData.SymbolId,
 				Period:              (*ProtoOATrendbarPeriod)(&subData.Period),
 			},
-			ResType: PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES,
-			Res:     &messages.ProtoOASubscribeLiveTrendbarRes{},
+			Res: &messages.ProtoOASubscribeLiveTrendbarRes{},
 		}
 	case APIEventType_DepthQuotes:
 		subData, ok := eventData.SubcriptionData.(*DepthQuoteEventData)
@@ -104,13 +100,11 @@ func (c *apiClient) subscribeAPIEvent(eventData APIEventSubData, bypassReconnect
 
 		ctid = subData.CtraderAccountId
 		reqData = RequestData{
-			ReqType: PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_REQ,
 			Req: &messages.ProtoOASubscribeDepthQuotesReq{
 				CtidTraderAccountId: (*int64)(&ctid),
 				SymbolId:            subData.SymbolIds,
 			},
-			ResType: PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_RES,
-			Res:     &messages.ProtoOASubscribeDepthQuotesRes{},
+			Res: &messages.ProtoOASubscribeDepthQuotesRes{},
 		}
 	default:
 		return ctid, &FunctionInvalidArgError{
@@ -163,13 +157,11 @@ func (c *apiClient) unsubscribeAPIEvent(eventData APIEventSubData, bypassReconne
 
 		ctid = subData.CtraderAccountId
 		reqData = RequestData{
-			ReqType: PROTO_OA_UNSUBSCRIBE_SPOTS_REQ,
 			Req: &messages.ProtoOAUnsubscribeSpotsReq{
 				CtidTraderAccountId: (*int64)(&ctid),
 				SymbolId:            subData.SymbolIds,
 			},
-			ResType: PROTO_OA_UNSUBSCRIBE_SPOTS_RES,
-			Res:     &messages.ProtoOAUnsubscribeSpotsRes{},
+			Res: &messages.ProtoOAUnsubscribeSpotsRes{},
 		}
 	case APIEventType_LiveTrendbars:
 		subData, ok := eventData.SubcriptionData.(*LiveTrendbarEventData)
@@ -182,14 +174,12 @@ func (c *apiClient) unsubscribeAPIEvent(eventData APIEventSubData, bypassReconne
 
 		ctid = subData.CtraderAccountId
 		reqData = RequestData{
-			ReqType: PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ,
 			Req: &messages.ProtoOAUnsubscribeLiveTrendbarReq{
 				CtidTraderAccountId: (*int64)(&ctid),
 				SymbolId:            &subData.SymbolId,
 				Period:              (*ProtoOATrendbarPeriod)(&subData.Period),
 			},
-			ResType: PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES,
-			Res:     &messages.ProtoOAUnsubscribeLiveTrendbarRes{},
+			Res: &messages.ProtoOAUnsubscribeLiveTrendbarRes{},
 		}
 	case APIEventType_DepthQuotes:
 		subData, ok := eventData.SubcriptionData.(*DepthQuoteEventData)
@@ -202,13 +192,11 @@ func (c *apiClient) unsubscribeAPIEvent(eventData APIEventSubData, bypassReconne
 
 		ctid = subData.CtraderAccountId
 		reqData = RequestData{
-			ReqType: PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ,
 			Req: &messages.ProtoOAUnsubscribeDepthQuotesReq{
 				CtidTraderAccountId: (*int64)(&ctid),
 				SymbolId:            subData.SymbolIds,
 			},
-			ResType: PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_RES,
-			Res:     &messages.ProtoOAUnsubscribeDepthQuotesRes{},
+			Res: &messages.ProtoOAUnsubscribeDepthQuotesRes{},
 		}
 	default:
 		return ctid, &FunctionInvalidArgError{
@@ -300,7 +288,7 @@ func (c *apiClient) runListenerRemove(listenerCtx context.Context, removeCallbac
 }
 
 // handleAPIEvent is called on an incoming event message that is listenable
-func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *messages.ProtoMessage) error {
+func (c *apiClient) handleAPIEvent(msgType protoOAPayloadType, protoMsg *messages.ProtoMessage) error {
 	var eventType apiEventType = apiEventType(msgType)
 
 	hasEvent := c.apiEventHandler.HasListenerSource(eventType)
@@ -314,7 +302,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 	var events []proto.Message
 
 	switch msgType {
-	case PROTO_OA_SPOT_EVENT:
+	case proto_OA_SPOT_EVENT:
 		var eventMsg ProtoOASpotEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -352,7 +340,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_DEPTH_EVENT:
+	case proto_OA_DEPTH_EVENT:
 		var eventMsg ProtoOADepthEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -365,7 +353,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 
 		events = append(events, &eventMsg)
 
-	case PROTO_OA_TRAILING_SL_CHANGED_EVENT:
+	case proto_OA_TRAILING_SL_CHANGED_EVENT:
 		var eventMsg ProtoOATrailingSLChangedEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -377,7 +365,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_SYMBOL_CHANGED_EVENT:
+	case proto_OA_SYMBOL_CHANGED_EVENT:
 		var eventMsg ProtoOASymbolChangedEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -389,7 +377,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_TRADER_UPDATE_EVENT:
+	case proto_OA_TRADER_UPDATE_EVENT:
 		var eventMsg ProtoOATraderUpdatedEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -401,7 +389,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_EXECUTION_EVENT:
+	case proto_OA_EXECUTION_EVENT:
 		var eventMsg ProtoOAExecutionEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -413,7 +401,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_ORDER_ERROR_EVENT:
+	case proto_OA_ORDER_ERROR_EVENT:
 		var eventMsg ProtoOAOrderErrorEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -425,7 +413,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_MARGIN_CHANGED_EVENT:
+	case proto_OA_MARGIN_CHANGED_EVENT:
 		var eventMsg ProtoOAMarginChangedEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -437,7 +425,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT:
+	case proto_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT:
 		var eventMsg ProtoOAAccountsTokenInvalidatedEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -449,7 +437,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_CLIENT_DISCONNECT_EVENT:
+	case proto_OA_CLIENT_DISCONNECT_EVENT:
 		if err := c.authenticateApp(); err != nil {
 			c.fatalErrCh <- fmt.Errorf("failed to re-authenticate app after client disconnect: %w", err)
 			return nil
@@ -466,7 +454,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_ACCOUNT_DISCONNECT_EVENT:
+	case proto_OA_ACCOUNT_DISCONNECT_EVENT:
 		var eventMsg ProtoOAAccountDisconnectEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -481,7 +469,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		c.onAccountDisconnect(ctid)
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_MARGIN_CALL_UPDATE_EVENT:
+	case proto_OA_MARGIN_CALL_UPDATE_EVENT:
 		var eventMsg ProtoOAMarginCallUpdateEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {
@@ -493,7 +481,7 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 		}
 
 		events = append(events, &eventMsg)
-	case PROTO_OA_MARGIN_CALL_TRIGGER_EVENT:
+	case proto_OA_MARGIN_CALL_TRIGGER_EVENT:
 		var eventMsg ProtoOAMarginCallTriggerEvent
 
 		if err := proto.Unmarshal(payloadBytes, &eventMsg); err != nil {

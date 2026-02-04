@@ -15,8 +15,8 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-	"github.com/linuskuehnle/ctraderopenapi/messages"
+	"github.com/linuskuehnle/ctraderopenapi/internal/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/internal/messages"
 
 	"context"
 	"errors"
@@ -36,11 +36,9 @@ func (c *apiClient) AuthenticateAccount(ctid CtraderAccountId, accessToken Acces
 	reqCtx := context.Background()
 
 	reqData := RequestData{
-		Ctx:     reqCtx,
-		ReqType: PROTO_OA_ACCOUNT_AUTH_REQ,
-		Req:     &req,
-		ResType: PROTO_OA_ACCOUNT_AUTH_RES,
-		Res:     &res,
+		Ctx: reqCtx,
+		Req: &req,
+		Res: &res,
 	}
 
 	if err := c.SendRequest(reqData); err != nil {
@@ -64,11 +62,9 @@ func (c *apiClient) LogoutAccount(ctid CtraderAccountId, waitForConfirm bool) (*
 	reqCtx := context.Background()
 
 	reqData := RequestData{
-		Ctx:     reqCtx,
-		ReqType: PROTO_OA_ACCOUNT_LOGOUT_REQ,
-		Req:     &req,
-		ResType: PROTO_OA_ACCOUNT_LOGOUT_RES,
-		Res:     &res,
+		Ctx: reqCtx,
+		Req: &req,
+		Res: &res,
 	}
 
 	wg := sync.WaitGroup{}
@@ -108,11 +104,9 @@ func (c *apiClient) RefreshAccessToken(expiredToken AccessToken, refreshToken Re
 	}
 
 	reqData := RequestData{
-		Ctx:     context.Background(),
-		ReqType: PROTO_OA_REFRESH_TOKEN_REQ,
-		Req:     &req,
-		ResType: PROTO_OA_REFRESH_TOKEN_RES,
-		Res:     &res,
+		Ctx: context.Background(),
+		Req: &req,
+		Res: &res,
 	}
 
 	if err := c.SendRequest(reqData); err != nil {
@@ -137,6 +131,13 @@ func (c *apiClient) SendRequest(reqData RequestData) error {
 }
 
 func (c *apiClient) sendRequest(reqData RequestData) error {
+	if err := reqData.CheckError(); err != nil {
+		return &FunctionInvalidArgError{
+			FunctionName: "SendRequest",
+			Err:          err,
+		}
+	}
+
 	if !c.lifecycleData.IsRunning() {
 		return &LifeCycleNotRunningError{
 			CallContext: "SendRequest",
@@ -149,22 +150,6 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 	ctx, cancelCtx := context.WithTimeout(reqData.Ctx, c.cfg.requestTimeout)
 	reqData.Ctx = ctx
 	defer cancelCtx()
-
-	expectedResType, exists := resTypeByReqType[reqData.ReqType]
-	if !exists {
-		return &FunctionInvalidArgError{
-			FunctionName: "SendRequest",
-			Err:          fmt.Errorf("provided unknown request type %d", reqData.ReqType),
-		}
-	}
-	if expectedResType != reqData.ResType {
-		return &FunctionInvalidArgError{
-			FunctionName: "SendRequest",
-			Err: fmt.Errorf("expected response type %d, got %d for request type %d",
-				expectedResType, reqData.ResType, reqData.ReqType,
-			),
-		}
-	}
 
 	errCh := make(chan error)
 	heapErrCh := make(chan error)
@@ -220,7 +205,7 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 		*/
 		if !errors.As(err, &resErr) || resErr.ErrorCode == resErrorCode_serverSideRateLimitHit {
 			// Set rate limiter penalty
-			rateLimitType := rateLimitTypeByReqType[metaData.ReqType]
+			rateLimitType := rateLimitTypeByReqType[metaData.Req.GetOAType()]
 			c.rateLimiters[rateLimitType].SetPenalty(rateLimitInterval)
 
 			// Execute request again
@@ -229,16 +214,16 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 		return err
 	}
 
-	if resData.PayloadType != reqData.ResType {
+	if resData.PayloadType != reqData.Res.GetOAType() {
 		return fmt.Errorf("unexpected response payload type: got %d, expected %d",
-			resData.PayloadType, reqData.ResType,
+			resData.PayloadType, reqData.Res.GetOAType(),
 		)
 	}
 
 	// Unmarshal payload into provided response struct
 	if err := proto.Unmarshal(payload, reqData.Res); err != nil {
 		return &ProtoUnmarshalError{
-			CallContext: fmt.Sprintf("proto response [%d]", reqData.ResType),
+			CallContext: fmt.Sprintf("proto response [%d]", reqData.Res.GetOAType()),
 			Err:         err,
 		}
 	}
@@ -248,14 +233,12 @@ func (c *apiClient) sendRequest(reqData RequestData) error {
 
 func (c *apiClient) authenticateApp() error {
 	reqData := RequestData{
-		Ctx:     context.Background(),
-		ReqType: PROTO_OA_APPLICATION_AUTH_REQ,
+		Ctx: context.Background(),
 		Req: &messages.ProtoOAApplicationAuthReq{
 			ClientId:     proto.String(c.cred.ClientId),
 			ClientSecret: proto.String(c.cred.ClientSecret),
 		},
-		ResType: PROTO_OA_APPLICATION_AUTH_RES,
-		Res:     &messages.ProtoOAApplicationAuthRes{},
+		Res: &messages.ProtoOAApplicationAuthRes{},
 	}
 
 	err := c.sendRequest(reqData)
@@ -276,9 +259,8 @@ func (c *apiClient) emitHeartbeat() error {
 	errCh := make(chan error)
 
 	reqData := RequestData{
-		Ctx:     context.Background(),
-		ReqType: ProtoOAPayloadType(messages.ProtoPayloadType_HEARTBEAT_EVENT),
-		Req:     &messages.ProtoHeartbeatEvent{},
+		Ctx: context.Background(),
+		Req: &messages.ProtoHeartbeatEvent{},
 	}
 
 	metaData, err := datatypes.NewRequestMetaData(&reqData, errCh, nil, nil)
@@ -317,11 +299,9 @@ func (c *apiClient) reloginActiveAccounts() error {
 			reqCtx := context.Background()
 
 			reqData := RequestData{
-				Ctx:     reqCtx,
-				ReqType: PROTO_OA_ACCOUNT_AUTH_REQ,
-				Req:     &req,
-				ResType: PROTO_OA_ACCOUNT_AUTH_RES,
-				Res:     &res,
+				Ctx: reqCtx,
+				Req: &req,
+				Res: &res,
 			}
 
 			if err := c.sendRequest(reqData); err != nil {
@@ -433,8 +413,8 @@ func (c *apiClient) resubscribeAccountSubs(ctid CtraderAccountId) error {
 	return nil
 }
 
-func checkResponseForError(payloadBytes []byte, payloadType ProtoOAPayloadType) error {
-	if payloadType != PROTO_OA_ERROR_RES {
+func checkResponseForError(payloadBytes []byte, payloadType protoOAPayloadType) error {
+	if payloadType != proto_OA_ERROR_RES {
 		return nil
 	}
 

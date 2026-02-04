@@ -15,8 +15,8 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-	"github.com/linuskuehnle/ctraderopenapi/messages"
+	"github.com/linuskuehnle/ctraderopenapi/internal/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/internal/messages"
 
 	"context"
 	"errors"
@@ -50,7 +50,7 @@ func (c *apiClient) onQueueData() {
 	// Check if internal rate limiter is being used
 	if c.rateLimiters != nil {
 		// Get the rate limit related type
-		rateLimitType, ok := rateLimitTypeByReqType[reqMetaData.ReqType]
+		rateLimitType, ok := rateLimitTypeByReqType[reqMetaData.Req.GetOAType()]
 		if ok {
 			// Schedule the request via rate limiter
 			c.rateLimiters[rateLimitType].WaitForPermit()
@@ -113,7 +113,7 @@ func (c *apiClient) onTCPMessage(msgBytes []byte) {
 		// Ignore heartbeat events
 		return
 	default:
-		msgOAPayloadType := ProtoOAPayloadType(msgPayloadType)
+		msgOAPayloadType := protoOAPayloadType(msgPayloadType)
 		if isAPIEvent[msgOAPayloadType] {
 			if err := c.handleAPIEvent(msgOAPayloadType, &protoMsg); err != nil {
 				c.fatalErrCh <- err

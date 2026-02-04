@@ -15,9 +15,9 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-	"github.com/linuskuehnle/ctraderopenapi/messages"
-	"github.com/linuskuehnle/ctraderopenapi/tcp"
+	"github.com/linuskuehnle/ctraderopenapi/internal/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/internal/messages"
+	"github.com/linuskuehnle/ctraderopenapi/internal/tcp"
 
 	"context"
 	"errors"
@@ -481,11 +481,11 @@ func (c *apiClient) handleSendPayload(reqMetaData *datatypes.RequestMetaData) er
 		}
 	}
 
-	return c.sendPayload(reqMetaData.Id, reqMetaData.Req, reqMetaData.ReqType)
+	return c.sendPayload(reqMetaData.Id, reqMetaData.Req, reqMetaData.Req.GetOAType())
 }
 
-func (c *apiClient) sendPayload(reqId datatypes.RequestId, msg proto.Message, payloadType ProtoOAPayloadType) error {
-	msgBytes, err := proto.Marshal(msg)
+func (c *apiClient) sendPayload(reqId datatypes.RequestId, payload proto.Message, payloadType protoOAPayloadType) error {
+	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
 		return &ProtoMarshalError{
 			CallContext: "proto message bytes",
@@ -494,13 +494,13 @@ func (c *apiClient) sendPayload(reqId datatypes.RequestId, msg proto.Message, pa
 	}
 
 	reqIdStr := string(reqId)
-	wrappedMsg := messages.ProtoMessage{
+	wrappedPayload := messages.ProtoMessage{
 		ClientMsgId: &reqIdStr,
 		PayloadType: proto.Uint32(uint32(payloadType)),
-		Payload:     msgBytes,
+		Payload:     payloadBytes,
 	}
 
-	reqBytes, err := proto.Marshal(&wrappedMsg)
+	reqBytes, err := proto.Marshal(&wrappedPayload)
 	if err != nil {
 		return &ProtoMarshalError{
 			CallContext: "request bytes",

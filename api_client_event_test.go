@@ -485,12 +485,10 @@ func TestClientEvents(t *testing.T) {
 	// Make a request to verify connection is working
 
 	reqData := RequestData{
-		ReqType: PROTO_OA_VERSION_REQ,
 		Req: &ProtoOAVersionReq{
-			PayloadType: PROTO_OA_VERSION_REQ.Enum(),
+			PayloadType: proto_OA_VERSION_REQ.Enum(),
 		},
-		ResType: PROTO_OA_VERSION_RES,
-		Res:     &ProtoOAVersionRes{},
+		Res: &ProtoOAVersionRes{},
 	}
 
 	if err := c.SendRequest(reqData); err != nil {

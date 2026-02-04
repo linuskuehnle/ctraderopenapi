@@ -15,7 +15,7 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/internal/datatypes"
 
 	"time"
 )
@@ -46,47 +46,47 @@ const (
 	rateLimitType_Historical
 )
 
-var rateLimitTypeByReqType = map[ProtoOAPayloadType]rateLimitType{
-	PROTO_OA_APPLICATION_AUTH_REQ:             rateLimitType_Live,
-	PROTO_OA_ACCOUNT_AUTH_REQ:                 rateLimitType_Live,
-	PROTO_OA_VERSION_REQ:                      rateLimitType_Live,
-	PROTO_OA_NEW_ORDER_REQ:                    rateLimitType_Live,
-	PROTO_OA_CANCEL_ORDER_REQ:                 rateLimitType_Live,
-	PROTO_OA_AMEND_ORDER_REQ:                  rateLimitType_Live,
-	PROTO_OA_AMEND_POSITION_SLTP_REQ:          rateLimitType_Live,
-	PROTO_OA_CLOSE_POSITION_REQ:               rateLimitType_Live,
-	PROTO_OA_ASSET_LIST_REQ:                   rateLimitType_Live,
-	PROTO_OA_SYMBOLS_LIST_REQ:                 rateLimitType_Live,
-	PROTO_OA_SYMBOL_BY_ID_REQ:                 rateLimitType_Live,
-	PROTO_OA_SYMBOLS_FOR_CONVERSION_REQ:       rateLimitType_Live,
-	PROTO_OA_TRADER_REQ:                       rateLimitType_Live,
-	PROTO_OA_RECONCILE_REQ:                    rateLimitType_Live,
-	PROTO_OA_SUBSCRIBE_SPOTS_REQ:              rateLimitType_Live,
-	PROTO_OA_UNSUBSCRIBE_SPOTS_REQ:            rateLimitType_Live,
-	PROTO_OA_DEAL_LIST_REQ:                    rateLimitType_Historical,
-	PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ:      rateLimitType_Live,
-	PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ:    rateLimitType_Live,
-	PROTO_OA_GET_TRENDBARS_REQ:                rateLimitType_Historical,
-	PROTO_OA_EXPECTED_MARGIN_REQ:              rateLimitType_Live,
-	PROTO_OA_CASH_FLOW_HISTORY_LIST_REQ:       rateLimitType_Historical,
-	PROTO_OA_GET_TICKDATA_REQ:                 rateLimitType_Historical,
-	PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ: rateLimitType_Live,
-	PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_REQ:    rateLimitType_Live,
-	PROTO_OA_ASSET_CLASS_LIST_REQ:             rateLimitType_Live,
-	PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_REQ:       rateLimitType_Live,
-	PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ:     rateLimitType_Live,
-	PROTO_OA_SYMBOL_CATEGORY_REQ:              rateLimitType_Live,
-	PROTO_OA_ACCOUNT_LOGOUT_REQ:               rateLimitType_Live,
-	PROTO_OA_MARGIN_CALL_LIST_REQ:             rateLimitType_Live,
-	PROTO_OA_MARGIN_CALL_UPDATE_REQ:           rateLimitType_Live,
-	PROTO_OA_REFRESH_TOKEN_REQ:                rateLimitType_Live,
-	PROTO_OA_ORDER_LIST_REQ:                   rateLimitType_Live,
-	PROTO_OA_GET_DYNAMIC_LEVERAGE_REQ:         rateLimitType_Live,
-	PROTO_OA_DEAL_LIST_BY_POSITION_ID_REQ:     rateLimitType_Live,
-	PROTO_OA_ORDER_DETAILS_REQ:                rateLimitType_Live,
-	PROTO_OA_ORDER_LIST_BY_POSITION_ID_REQ:    rateLimitType_Live,
-	PROTO_OA_DEAL_OFFSET_LIST_REQ:             rateLimitType_Live,
-	PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ:  rateLimitType_Live,
+var rateLimitTypeByReqType = map[protoOAPayloadType]rateLimitType{
+	proto_OA_APPLICATION_AUTH_REQ:             rateLimitType_Live,
+	proto_OA_ACCOUNT_AUTH_REQ:                 rateLimitType_Live,
+	proto_OA_VERSION_REQ:                      rateLimitType_Live,
+	proto_OA_NEW_ORDER_REQ:                    rateLimitType_Live,
+	proto_OA_CANCEL_ORDER_REQ:                 rateLimitType_Live,
+	proto_OA_AMEND_ORDER_REQ:                  rateLimitType_Live,
+	proto_OA_AMEND_POSITION_SLTP_REQ:          rateLimitType_Live,
+	proto_OA_CLOSE_POSITION_REQ:               rateLimitType_Live,
+	proto_OA_ASSET_LIST_REQ:                   rateLimitType_Live,
+	proto_OA_SYMBOLS_LIST_REQ:                 rateLimitType_Live,
+	proto_OA_SYMBOL_BY_ID_REQ:                 rateLimitType_Live,
+	proto_OA_SYMBOLS_FOR_CONVERSION_REQ:       rateLimitType_Live,
+	proto_OA_TRADER_REQ:                       rateLimitType_Live,
+	proto_OA_RECONCILE_REQ:                    rateLimitType_Live,
+	proto_OA_SUBSCRIBE_SPOTS_REQ:              rateLimitType_Live,
+	proto_OA_UNSUBSCRIBE_SPOTS_REQ:            rateLimitType_Live,
+	proto_OA_DEAL_LIST_REQ:                    rateLimitType_Historical,
+	proto_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ:      rateLimitType_Live,
+	proto_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ:    rateLimitType_Live,
+	proto_OA_GET_TRENDBARS_REQ:                rateLimitType_Historical,
+	proto_OA_EXPECTED_MARGIN_REQ:              rateLimitType_Live,
+	proto_OA_CASH_FLOW_HISTORY_LIST_REQ:       rateLimitType_Historical,
+	proto_OA_GET_TICKDATA_REQ:                 rateLimitType_Historical,
+	proto_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ: rateLimitType_Live,
+	proto_OA_GET_CTID_PROFILE_BY_TOKEN_REQ:    rateLimitType_Live,
+	proto_OA_ASSET_CLASS_LIST_REQ:             rateLimitType_Live,
+	proto_OA_SUBSCRIBE_DEPTH_QUOTES_REQ:       rateLimitType_Live,
+	proto_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ:     rateLimitType_Live,
+	proto_OA_SYMBOL_CATEGORY_REQ:              rateLimitType_Live,
+	proto_OA_ACCOUNT_LOGOUT_REQ:               rateLimitType_Live,
+	proto_OA_MARGIN_CALL_LIST_REQ:             rateLimitType_Live,
+	proto_OA_MARGIN_CALL_UPDATE_REQ:           rateLimitType_Live,
+	proto_OA_REFRESH_TOKEN_REQ:                rateLimitType_Live,
+	proto_OA_ORDER_LIST_REQ:                   rateLimitType_Live,
+	proto_OA_GET_DYNAMIC_LEVERAGE_REQ:         rateLimitType_Live,
+	proto_OA_DEAL_LIST_BY_POSITION_ID_REQ:     rateLimitType_Live,
+	proto_OA_ORDER_DETAILS_REQ:                rateLimitType_Live,
+	proto_OA_ORDER_LIST_BY_POSITION_ID_REQ:    rateLimitType_Live,
+	proto_OA_DEAL_OFFSET_LIST_REQ:             rateLimitType_Live,
+	proto_OA_GET_POSITION_UNREALIZED_PNL_REQ:  rateLimitType_Live,
 }
 
 var (
@@ -121,88 +121,44 @@ const (
 	resErrorCode_serverSideRateLimitHit    = "REQUEST_FREQUENCY_EXCEEDED"
 )
 
-// Mapped responses to requests
-var resTypeByReqType = map[ProtoOAPayloadType]ProtoOAPayloadType{
-	PROTO_OA_APPLICATION_AUTH_REQ:             PROTO_OA_APPLICATION_AUTH_RES,
-	PROTO_OA_ACCOUNT_AUTH_REQ:                 PROTO_OA_ACCOUNT_AUTH_RES,
-	PROTO_OA_VERSION_REQ:                      PROTO_OA_VERSION_RES,
-	PROTO_OA_NEW_ORDER_REQ:                    0, // no response defined
-	PROTO_OA_CANCEL_ORDER_REQ:                 0, // no response defined
-	PROTO_OA_AMEND_ORDER_REQ:                  0, // no response defined
-	PROTO_OA_AMEND_POSITION_SLTP_REQ:          0, // no response defined
-	PROTO_OA_CLOSE_POSITION_REQ:               0, // no response defined
-	PROTO_OA_ASSET_LIST_REQ:                   PROTO_OA_ASSET_LIST_RES,
-	PROTO_OA_SYMBOLS_LIST_REQ:                 PROTO_OA_SYMBOLS_LIST_RES,
-	PROTO_OA_SYMBOL_BY_ID_REQ:                 PROTO_OA_SYMBOL_BY_ID_RES,
-	PROTO_OA_SYMBOLS_FOR_CONVERSION_REQ:       PROTO_OA_SYMBOLS_FOR_CONVERSION_RES,
-	PROTO_OA_TRADER_REQ:                       PROTO_OA_TRADER_RES,
-	PROTO_OA_RECONCILE_REQ:                    PROTO_OA_RECONCILE_RES,
-	PROTO_OA_SUBSCRIBE_SPOTS_REQ:              PROTO_OA_SUBSCRIBE_SPOTS_RES,
-	PROTO_OA_UNSUBSCRIBE_SPOTS_REQ:            PROTO_OA_UNSUBSCRIBE_SPOTS_RES,
-	PROTO_OA_DEAL_LIST_REQ:                    PROTO_OA_DEAL_LIST_RES,
-	PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ:      PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES,
-	PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ:    PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES,
-	PROTO_OA_GET_TRENDBARS_REQ:                PROTO_OA_GET_TRENDBARS_RES,
-	PROTO_OA_EXPECTED_MARGIN_REQ:              PROTO_OA_EXPECTED_MARGIN_RES,
-	PROTO_OA_CASH_FLOW_HISTORY_LIST_REQ:       PROTO_OA_CASH_FLOW_HISTORY_LIST_RES,
-	PROTO_OA_GET_TICKDATA_REQ:                 PROTO_OA_GET_TICKDATA_RES,
-	PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ: PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES,
-	PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_REQ:    PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_RES,
-	PROTO_OA_ASSET_CLASS_LIST_REQ:             PROTO_OA_ASSET_CLASS_LIST_RES,
-	PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_REQ:       PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_RES,
-	PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ:     PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_RES,
-	PROTO_OA_SYMBOL_CATEGORY_REQ:              PROTO_OA_SYMBOL_CATEGORY_RES,
-	PROTO_OA_ACCOUNT_LOGOUT_REQ:               PROTO_OA_ACCOUNT_LOGOUT_RES,
-	PROTO_OA_MARGIN_CALL_LIST_REQ:             PROTO_OA_MARGIN_CALL_LIST_RES,
-	PROTO_OA_MARGIN_CALL_UPDATE_REQ:           PROTO_OA_MARGIN_CALL_UPDATE_RES,
-	PROTO_OA_REFRESH_TOKEN_REQ:                PROTO_OA_REFRESH_TOKEN_RES,
-	PROTO_OA_ORDER_LIST_REQ:                   PROTO_OA_ORDER_LIST_RES,
-	PROTO_OA_GET_DYNAMIC_LEVERAGE_REQ:         PROTO_OA_GET_DYNAMIC_LEVERAGE_RES,
-	PROTO_OA_DEAL_LIST_BY_POSITION_ID_REQ:     PROTO_OA_DEAL_LIST_BY_POSITION_ID_RES,
-	PROTO_OA_ORDER_DETAILS_REQ:                PROTO_OA_ORDER_DETAILS_RES,
-	PROTO_OA_ORDER_LIST_BY_POSITION_ID_REQ:    PROTO_OA_ORDER_LIST_BY_POSITION_ID_RES,
-	PROTO_OA_DEAL_OFFSET_LIST_REQ:             PROTO_OA_DEAL_OFFSET_LIST_RES,
-	PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ:  PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES,
+var isAPIEvent = map[protoOAPayloadType]bool{
+	proto_OA_SPOT_EVENT:                       true,
+	proto_OA_DEPTH_EVENT:                      true,
+	proto_OA_TRAILING_SL_CHANGED_EVENT:        true,
+	proto_OA_SYMBOL_CHANGED_EVENT:             true,
+	proto_OA_TRADER_UPDATE_EVENT:              true,
+	proto_OA_EXECUTION_EVENT:                  true,
+	proto_OA_ORDER_ERROR_EVENT:                true,
+	proto_OA_MARGIN_CHANGED_EVENT:             true,
+	proto_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT: true,
+	proto_OA_CLIENT_DISCONNECT_EVENT:          true,
+	proto_OA_ACCOUNT_DISCONNECT_EVENT:         true,
+	proto_OA_MARGIN_CALL_UPDATE_EVENT:         true,
+	proto_OA_MARGIN_CALL_TRIGGER_EVENT:        true,
 }
 
-var isAPIEvent = map[ProtoOAPayloadType]bool{
-	PROTO_OA_SPOT_EVENT:                       true,
-	PROTO_OA_DEPTH_EVENT:                      true,
-	PROTO_OA_TRAILING_SL_CHANGED_EVENT:        true,
-	PROTO_OA_SYMBOL_CHANGED_EVENT:             true,
-	PROTO_OA_TRADER_UPDATE_EVENT:              true,
-	PROTO_OA_EXECUTION_EVENT:                  true,
-	PROTO_OA_ORDER_ERROR_EVENT:                true,
-	PROTO_OA_MARGIN_CHANGED_EVENT:             true,
-	PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT: true,
-	PROTO_OA_CLIENT_DISCONNECT_EVENT:          true,
-	PROTO_OA_ACCOUNT_DISCONNECT_EVENT:         true,
-	PROTO_OA_MARGIN_CALL_UPDATE_EVENT:         true,
-	PROTO_OA_MARGIN_CALL_TRIGGER_EVENT:        true,
-}
-
-var hasHookForAPIEvent = map[ProtoOAPayloadType]bool{
-	PROTO_OA_ACCOUNT_DISCONNECT_EVENT: true,
+var hasHookForAPIEvent = map[protoOAPayloadType]bool{
+	proto_OA_ACCOUNT_DISCONNECT_EVENT: true,
 }
 
 const (
 	// Subscribable events
-	APIEventType_Spots         apiEventType = PROTO_OA_SPOT_EVENT
+	APIEventType_Spots         apiEventType = proto_OA_SPOT_EVENT
 	APIEventType_LiveTrendbars              = 1
-	APIEventType_DepthQuotes                = PROTO_OA_DEPTH_EVENT
+	APIEventType_DepthQuotes                = proto_OA_DEPTH_EVENT
 
 	// Listenable events
-	APIEventType_TrailingSLChanged        = PROTO_OA_TRAILING_SL_CHANGED_EVENT
-	APIEventType_SymbolChanged            = PROTO_OA_SYMBOL_CHANGED_EVENT
-	APIEventType_TraderUpdated            = PROTO_OA_TRADER_UPDATE_EVENT
-	APIEventType_Execution                = PROTO_OA_EXECUTION_EVENT
-	APIEventType_OrderError               = PROTO_OA_ORDER_ERROR_EVENT
-	APIEventType_MarginChanged            = PROTO_OA_MARGIN_CHANGED_EVENT
-	APIEventType_AccountsTokenInvalidated = PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT
-	APIEventType_ClientDisconnect         = PROTO_OA_CLIENT_DISCONNECT_EVENT
-	APIEventType_AccountDisconnect        = PROTO_OA_ACCOUNT_DISCONNECT_EVENT
-	APIEventType_MarginCallUpdate         = PROTO_OA_MARGIN_CALL_UPDATE_EVENT
-	APIEventType_MarginCallTrigger        = PROTO_OA_MARGIN_CALL_TRIGGER_EVENT
+	APIEventType_TrailingSLChanged        = proto_OA_TRAILING_SL_CHANGED_EVENT
+	APIEventType_SymbolChanged            = proto_OA_SYMBOL_CHANGED_EVENT
+	APIEventType_TraderUpdated            = proto_OA_TRADER_UPDATE_EVENT
+	APIEventType_Execution                = proto_OA_EXECUTION_EVENT
+	APIEventType_OrderError               = proto_OA_ORDER_ERROR_EVENT
+	APIEventType_MarginChanged            = proto_OA_MARGIN_CHANGED_EVENT
+	APIEventType_AccountsTokenInvalidated = proto_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT
+	APIEventType_ClientDisconnect         = proto_OA_CLIENT_DISCONNECT_EVENT
+	APIEventType_AccountDisconnect        = proto_OA_ACCOUNT_DISCONNECT_EVENT
+	APIEventType_MarginCallUpdate         = proto_OA_MARGIN_CALL_UPDATE_EVENT
+	APIEventType_MarginCallTrigger        = proto_OA_MARGIN_CALL_TRIGGER_EVENT
 )
 
 const (

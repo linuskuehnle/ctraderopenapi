@@ -15,8 +15,8 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-	"github.com/linuskuehnle/ctraderopenapi/tcp"
+	"github.com/linuskuehnle/ctraderopenapi/internal/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/internal/tcp"
 
 	"fmt"
 )
@@ -105,7 +105,7 @@ func (e *GenericResponseError) IsOngoingMaintenance() bool {
 // or cannot handle. It includes the numeric message type for
 // debugging/logging.
 type UnexpectedMessageTypeError struct {
-	MsgType ProtoOAPayloadType
+	MsgType protoOAPayloadType
 }
 
 func (e *UnexpectedMessageTypeError) Error() string {

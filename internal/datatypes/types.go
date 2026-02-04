@@ -15,7 +15,7 @@
 package datatypes
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/messages"
+	"github.com/linuskuehnle/ctraderopenapi/internal/messages"
 
 	"context"
 	"errors"
@@ -42,12 +42,37 @@ type RefreshToken string
 
 type RequestId string
 
+type OpenAPIPayload interface {
+	proto.Message
+
+	GetOAType() messages.ProtoOAPayloadType
+}
+
 type RequestData struct {
-	Ctx     context.Context
-	ReqType messages.ProtoOAPayloadType
-	Req     proto.Message
-	ResType messages.ProtoOAPayloadType
-	Res     proto.Message
+	Ctx context.Context
+	Req OpenAPIPayload
+	Res OpenAPIPayload
+}
+
+func (d *RequestData) CheckError() error {
+	if d.Req == nil {
+		return errors.New("field Req mustn't be nil")
+	}
+	if d.Res == nil {
+		return errors.New("field Res mustn't be nil")
+	}
+
+	expectedResType, exists := resTypeByReqType[d.Req.GetOAType()]
+	if !exists {
+		return fmt.Errorf("provided unknown request type %d", d.Req.GetOAType())
+	}
+	if expectedResType != 0 && expectedResType != d.Res.GetOAType() {
+		return fmt.Errorf("expected response type %d, got %d for request type %d",
+			expectedResType, d.Res.GetOAType(), d.Req.GetOAType(),
+		)
+	}
+
+	return nil
 }
 
 type ResponseData struct {

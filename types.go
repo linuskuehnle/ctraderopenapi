@@ -15,8 +15,8 @@
 package ctraderopenapi
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
-	"github.com/linuskuehnle/ctraderopenapi/messages"
+	"github.com/linuskuehnle/ctraderopenapi/internal/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/internal/messages"
 
 	"fmt"
 	"time"

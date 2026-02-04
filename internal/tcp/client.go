@@ -15,7 +15,7 @@
 package tcp
 
 import (
-	"github.com/linuskuehnle/ctraderopenapi/datatypes"
+	"github.com/linuskuehnle/ctraderopenapi/internal/datatypes"
 
 	"bufio"
 	"context"
