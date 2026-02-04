@@ -111,6 +111,9 @@ full comments and examples):
 		to periodically check for expired request contexts.
 	- `WithRequestTimeout(time.Duration)` updates the duration until a request roundtrip is aborted
 		no matter if already sent or not.
+	- `DisableConcurrentEventEmits()` disables concurrent event emit; events are passed sequentially
+		to event channels instead of being spawned in separate goroutines. This reduces overhead but
+		may block the client if an event channel buffer is full.
 	- `DisableDefaultRateLimiter()` to disable the client-side rate limiter.
 
 	**Rate limiting:** The client enforces rate limits to prevent server-side throttling:

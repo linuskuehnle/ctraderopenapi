@@ -27,6 +27,7 @@ type apiClientConfig struct {
 	queueBufferSize             int
 	tcpMessageBufferSize        int
 	requestHeapIterationTimeout time.Duration
+	concurrentEventEmits        bool
 }
 
 func defaultAPIClientConfig() apiClientConfig {
@@ -35,6 +36,7 @@ func defaultAPIClientConfig() apiClientConfig {
 		queueBufferSize:             ConfigDefault_QueueBufferSize,
 		tcpMessageBufferSize:        ConfigDefault_TCPMessageBufferSize,
 		requestHeapIterationTimeout: ConfigDefault_RequestHeapIterationTimeout,
+		concurrentEventEmits:        ConfigDefault_ConcurrentEventEmits,
 	}
 }
 

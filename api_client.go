@@ -76,6 +76,15 @@ type APIClient interface {
 	// the same client to allow fluent construction.
 	WithRequestHeapIterationTimeout(time.Duration) APIClient
 
+	// DisableConcurrentEventEmits disables the concurrent event emit which means that event
+	// messages will be passed sequentially to the event channels registered with
+	// ListenToAPIEvent or ListenToClientEvent. This is a performance feature with the
+	// drawback that the API client blocks once an event channel buffer is full.
+	//
+	// By default each event is emitted inside an explicitly spawned goroutine to prevent the
+	// API client from blocking, hence it is less performant.
+	DisableConcurrentEventEmits() APIClient
+
 	// DisableDefaultRateLimiter disables the internal request rate limiter. Only do this
 	// when you either use your own rate limiter or if you do not expect to ever reach the
 	// request rate limit.
@@ -323,6 +332,19 @@ func (c *apiClient) WithRequestHeapIterationTimeout(requestHeapIterationTimeout 
 	}
 
 	c.cfg.requestHeapIterationTimeout = requestHeapIterationTimeout
+
+	return c
+}
+
+func (c *apiClient) DisableConcurrentEventEmits() APIClient {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.lifecycleData.IsClientInitialized() {
+		return c
+	}
+
+	c.cfg.concurrentEventEmits = false
 
 	return c
 }

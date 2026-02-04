@@ -517,7 +517,11 @@ func (c *apiClient) handleAPIEvent(msgType ProtoOAPayloadType, protoMsg *message
 	}
 
 	for _, event := range events {
-		c.apiEventHandler.HandleEvent(eventType, event.(APIEvent))
+		if c.cfg.concurrentEventEmits {
+			go c.apiEventHandler.HandleEvent(eventType, event.(APIEvent))
+		} else {
+			c.apiEventHandler.HandleEvent(eventType, event.(APIEvent))
+		}
 	}
 
 	return nil

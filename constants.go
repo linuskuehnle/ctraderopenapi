@@ -25,6 +25,7 @@ const (
 	ConfigDefault_QueueBufferSize             = 10
 	ConfigDefault_TCPMessageBufferSize        = 10
 	ConfigDefault_RequestHeapIterationTimeout = datatypes.DefaultRequestHeapIterationTimeout
+	ConfigDefault_ConcurrentEventEmits        = true
 
 	MinRequestTimeout              = time.Millisecond * 50
 	MinQueueBufferSize             = 1
